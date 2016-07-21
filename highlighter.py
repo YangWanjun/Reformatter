@@ -77,6 +77,7 @@ class Highlighter(QtGui.QSyntaxHighlighter):
         if result:
             text = result.to_sql()
         self.document().setPlainText(text)
+        return p.errors
 
 
 class SqlHighlighter(Highlighter):

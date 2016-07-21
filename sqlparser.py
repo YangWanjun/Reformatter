@@ -1,3 +1,4 @@
+# coding: UTF-8
 """
 See links for example yacc SQL grammars:
 http://yaxx.googlecode.com/svn/trunk/sql/sql2.y
@@ -212,6 +213,7 @@ class SqlLexer(object):
         'timezone_hour'    : 'TIMEZONE_HOUR',
         'timezone_minute'  : 'TIMEZONE_MINUTE',
         'to'               : 'TO',
+        'top'              : 'TOP',
         'trailing'         : 'TRAILING',
         'transaction'      : 'TRANSACTION',
         'translate'        : 'TRANSLATE',
@@ -242,7 +244,7 @@ class SqlLexer(object):
     }
 
     tokens = ['NUMBER',
-              'ID',          'COLON',
+              'ID',         'COLON',
               'STRING',     'PERIOD',
               'COMMA',      'SEMI',
               'PLUS',       'MINUS',
@@ -251,6 +253,7 @@ class SqlLexer(object):
               'GT',         'GE',
               'LT',         'LE',
               'EQ',         'NE',
+              'LBRACKET',   'RBRACKET'
               ] + list(reserved.values())
 
     def t_NUMBER(self, t):
@@ -270,7 +273,7 @@ class SqlLexer(object):
         return t
 
     def t_COMMENT(self, t):
-        r'\-\-.*'
+        r'(/\*(.|\n)*?\*/)|(\-\-.*)'
         pass
 
     def t_STRING(self, t):
@@ -302,6 +305,8 @@ class SqlLexer(object):
     t_DIVIDE  = r'/'
     t_LPAREN  = r'\('
     t_RPAREN  = r'\)'
+    t_LBRACKET = r'\['
+    t_RBRACKET = r'\]'
     t_GT      = r'>'
     t_GE      = r'>='
     t_LT      = r'<'
@@ -361,17 +366,23 @@ class SqlParser(object):
 
     tokens = SqlLexer.tokens
 
+    def __init__(self):
+        self.errors = []
+
     def p_query_specification(self, p):
         """
-        query_specification : SELECT set_quantifier select_list table_expression
+        query_specification : SELECT set_quantifier opt_top select_list table_expression
         """
         set_quantifier = ' ' + p[2].sql if p[2].sql else ''
-        sql_select_list = p[3].set_indent('     ')
+        opt_top = p[3].sql
+        if opt_top:
+            set_quantifier += ' ' + opt_top
+        sql_select_list = p[4].set_indent('     ')
         select_list = '\n       ' + sql_select_list if set_quantifier else sql_select_list
         sql = '%s%s %s %s' % (p[1],
                               set_quantifier,
-                              select_list, p[4].sql)
-        children = [p[2], p[3], p[4]]
+                              select_list, p[5].sql)
+        children = [p[2], p[4], p[5]]
         p[0] = Node('query_specification', children, sql)
 
     def p_set_quantifier(self, p):
@@ -386,6 +397,18 @@ class SqlParser(object):
         else:
             sql = p[1]
         p[0] = Node('set_quantifier', children, sql)
+
+    def p_opt_top(self, p):
+        """
+        opt_top : TOP NUMBER
+                |
+        """
+        children = None
+        if len(p) == 1:
+            sql = ''
+        else:
+            sql = '%s %s' % (p[1], p[2])
+        p[0] = Node('opt_top', children, sql)
 
     def p_select_list(self, p):
         """
@@ -974,15 +997,15 @@ class SqlParser(object):
 
     def p_column_reference(self, p):
         """
-        column_reference : qualifier PERIOD ID
-                         | ID
+        column_reference : qualifier PERIOD column_name
+                         | column_name
         """
         if len(p) == 2:
             children = None
-            sql = p[1]
+            sql = p[1].sql
         else:
             children = p[1]
-            sql = '%s.%s' % (p[1].sql, p[3])
+            sql = '%s.%s' % (p[1].sql, p[3].sql)
         p[0] = Node('column_reference', children, sql)
 
     def p_set_function_specification(self, p):
@@ -1662,10 +1685,15 @@ class SqlParser(object):
 
     def p_table_name(self, p):
         """
-        table_name : qualified_name
+        table_name : LBRACKET qualified_name RBRACKET
+                   | qualified_name
         """
-        children = p[1]
-        sql = p[1].sql
+        if len(p) == 2:
+            children = p[1]
+            sql = p[1].sql
+        else:
+            children = p[2]
+            sql = '[%s]' % (p[2].sql,)
         p[0] = Node('table_name', children, sql)
 
     def p_qualified_name(self, p):
@@ -1734,13 +1762,18 @@ class SqlParser(object):
 
     def p_column_name(self, p):
         """
-        column_name : ID
+        column_name : LBRACKET ID RBRACKET
+                    | ID
         """
-        sql = p[1]
+        if len(p) == 2:
+            sql = p[1]
+        else:
+            sql = '[%s]' % (p[2],)
         p[0] = Node('column_name', None, sql)
 
     def p_error(self, p):
-        print "Syntax error near %s! at line %d, pos %d!" % (p.value, p.lineno, p.lexpos)
+        message = u"Error: '%s' 付近に不適切な構文があります。! %d 行, %d 列!" % (p.value, p.lineno, p.lexpos)
+        self.errors.append(message)
 
     def build(self, **kwargs):
         self.parser = yacc.yacc(module=self, **kwargs)
