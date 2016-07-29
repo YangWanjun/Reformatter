@@ -70,14 +70,19 @@ class Highlighter(QtGui.QSyntaxHighlighter):
         text = self.document().toPlainText()
         if not self.doc_type and not text:
             return
+        # try:
         p = SqlParser()
         parser = p.build()
-        lexer = SqlLexer().build()
+        lex = SqlLexer()
+        lexer = lex.build()
         result = parser.parse(unicode(text), lexer=lexer)
         if result:
             text = result.to_sql()
         self.document().setPlainText(text)
-        return p.errors
+        return p.errors + lex.errors
+        # except Exception, ex:
+        #     print ex
+        #     return [ex.message]
 
 
 class SqlHighlighter(Highlighter):
@@ -119,7 +124,7 @@ class SqlHighlighter(Highlighter):
             r'\bSESSION_USER\b', r'\bSET\b', r'\bSIZE\b', r'\bSMALLINT\b', r'\bSOME\b', r'\bSPACE\b',
             r'\bSQL\b', r'\bSQLCODE\b', r'\bSQLERROR\b', r'\bSQLSTATE\b', r'\bSUBSTRING\b', r'\bSUM\b',
             r'\bSYSTEM_USER\b', r'\bTABLE\b', r'\bTEMPORARY\b', r'\bTHEN\b', r'\bTIME\b',
-            r'\bTIMESTAMP\b', r'\bTIMEZONE_HOUR\b', r'\bTIMEZONE_MINUTE\b', r'\bTO\b', r'\bTRAILING\b',
+            r'\bTIMESTAMP\b', r'\bTIMEZONE_HOUR\b', r'\bTIMEZONE_MINUTE\b', r'\bTO\b', r'\bTOP\b', r'\bTRAILING\b',
             r'\bTRANSACTION\b', r'\bTRANSLATE\b', r'\bTRANSLATION\b', r'\bTRIM\b', r'\bTRUE\b',
             r'\bUNION\b', r'\bUNIQUE\b', r'\bUNKNOWN\b', r'\bUPDATE\b', r'\bUPPER\b', r'\bUSAGE\b',
             r'\bUSER\b', r'\bUSING\b', r'\bVALUE\b', r'\bVALUES\b', r'\bVARCHAR\b', r'\bVARYING\b',

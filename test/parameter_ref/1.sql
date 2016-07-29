@@ -1,0 +1,1 @@
+select :PARAM1, @PARAM2, ?, ?, ? from a
