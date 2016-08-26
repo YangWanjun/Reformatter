@@ -6,7 +6,7 @@ def get_tab_space_count():
 
 
 def set_indent(sql, indent):
-    if indent and str(sql).find('\n') >= 0:
+    if indent and sql.find('\n') >= 0:
         sqls = []
         for sub_sql in sql.split('\n'):
             if sqls:

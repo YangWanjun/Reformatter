@@ -1,0 +1,1 @@
+delete from table1 where c1=1 and c2=(select sum(c1) from table2)

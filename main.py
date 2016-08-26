@@ -1,23 +1,26 @@
 #coding: UTF-8
 #!/usr/bin/env python
 
-import common
+import os, re
+import common, constants
 
 from PyQt4 import QtCore, QtGui
 from highlighter import SqlHighlighter
+from sqlparser import SqlLexer, SqlParser
 
 
 class MainWindow(QtGui.QMainWindow):
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
-        self.editor = None
-        self.highlighter = None
+        # エディターのTagWidget
+        self.editors = None
         self.status_bar = None
 
         self.init_layout()
+        self.new_file()
 
         self.setWindowIcon(QtGui.QIcon('logo.ico'))
-        self.setCentralWidget(self.editor)
+        self.setCentralWidget(self.editors)
         self.setWindowTitle("Reformatter")
 
     def about(self):
@@ -29,8 +32,8 @@ class MainWindow(QtGui.QMainWindow):
 
     def init_layout(self):
         # エディター
-        self.editor = CodeEditor(self)
-        self.highlighter = SqlHighlighter(self.editor.document())
+        self.editors = Editors(self)
+
         # ステータスバー
         self.status_bar = StatusBar()
         self.setStatusBar(self.status_bar)
@@ -46,12 +49,22 @@ class MainWindow(QtGui.QMainWindow):
         file_menu.addAction(u"開く(&O)", self.open_file, "Ctrl+O")
         codec_menu = file_menu.addMenu(u"開き直す")
         signal_mapper = QtCore.QSignalMapper(self)
-        for codec in sorted(QtCore.QTextCodec.availableCodecs()):
+        for codec in sorted(CodeEditor.CODEC_LIST):
             action = QtGui.QAction(str(codec), codec_menu)
             self.connect(action, QtCore.SIGNAL('triggered()'), signal_mapper, QtCore.SLOT('map()'))
             signal_mapper.setMapping(action, str(codec))
             codec_menu.addAction(action)
+        codec_menu.addSeparator()
+        codec_menu_all = QtGui.QMenu(u"すべて(&A)", self)
+        codec_menu.addMenu(codec_menu_all)
+        for codec in sorted(QtCore.QTextCodec.availableCodecs(), key=lambda s: str(s).lower()):
+            action = QtGui.QAction(str(codec), codec_menu_all)
+            self.connect(action, QtCore.SIGNAL('triggered()'), signal_mapper, QtCore.SLOT('map()'))
+            signal_mapper.setMapping(action, str(codec))
+            codec_menu_all.addAction(action)
         self.connect(signal_mapper, QtCore.SIGNAL('mapped(QString)'), self.menuItemClicked)
+        file_menu.addSeparator()
+        file_menu.addAction(u"閉じる(&C)", self.close_file, "Ctrl+F4")
         file_menu.addSeparator()
         file_menu.addAction(u"終了(&X)", QtGui.qApp.quit, "Ctrl+Q")
         
@@ -59,46 +72,45 @@ class MainWindow(QtGui.QMainWindow):
         edit_menu = QtGui.QMenu(u"編集(&E)", self)
         self.menuBar().addMenu(edit_menu)
         
-        edit_menu.addAction(u"右(末尾)の空白を削除", self.editor.delete_right_space, "ALT+R")
+        edit_menu.addAction(u"ソース整形", self.source_reformat, "Ctrl+Shift+F")
+        edit_menu.addSeparator()
+        edit_menu.addAction(u"左(先頭)の空白を削除", self.delete_left_space, "ALT+L")
+        edit_menu.addAction(u"右(末尾)の空白を削除", self.delete_right_space, "ALT+R")
 
     def menuItemClicked(self, name):
-        if name and self.editor.path:
-            self.open_file(self.editor.path, name)
-
-    def is_text_changed(self):
-        return self.editor.document().isModified()
+        if name and self.get_current_editor().path:
+            self.open_file(self.get_current_editor().path, name)
 
     def new_file(self):
-        if self.is_text_changed():
-            if QtGui.QMessageBox.question(self, u"確認", u"内容を破棄してもよろしいですか？", QtGui.QMessageBox.Ok | QtGui.QMessageBox.Cancel) == QtGui.QMessageBox.Cancel:
-                return
-
-        self.editor.clear()
+        self.editors.add_editor(None)
 
     def open_file(self, path=None, codec=None):
-        if not path:
-            path = QtGui.QFileDialog.getOpenFileName(self, u"開く", '', "Sql Files (*.sql);;All Files(*.*)")
+        self.editors.open_file(path, codec)
 
-        if path:
-            codec = codec if codec else 'UTF-8'
-            self.editor.path = path
-            self.editor.codec = codec
-            in_file = QtCore.QFile(path)
-            if in_file.open(QtCore.QFile.ReadOnly | QtCore.QFile.Text):
-                byte_array = in_file.readAll()
-                # text = str(text)
-                text = QtCore.QTextCodec.codecForName(codec).toUnicode(byte_array)
+    def close_file(self):
+        self.editors.removeTab(self.editors.currentIndex())
 
-                self.editor.setPlainText(text)
+    def delete_left_space(self):
+        if self.editors.currentWidget():
+            self.editors.currentWidget().delete_left_space()
 
-    def keyPressEvent(self, event):
-        if event.modifiers() == (QtCore.Qt.ControlModifier | QtCore.Qt.ShiftModifier):
-            if event.key() == QtCore.Qt.Key_F:
-                errors = self.highlighter.reformat()
-                if errors:
-                    self.set_status_message(errors[0])
-                else:
-                    self.set_status_message('Success!', 3000)
+    def delete_right_space(self):
+        if self.editors.currentWidget():
+            self.editors.currentWidget().delete_right_space()
+
+    def source_reformat(self):
+        if self.get_current_editor():
+            errors = self.get_current_editor().reformat()
+            if errors:
+                self.set_status_message(errors[0])
+            else:
+                self.set_status_message('Success!', 3000)
+
+    def get_current_editor(self):
+        if self.editors:
+            return self.editors.currentWidget()
+        else:
+            return None
 
     def set_status_message(self, message, times=0):
         """
@@ -108,10 +120,6 @@ class MainWindow(QtGui.QMainWindow):
             self.status_bar.showMessage(message, times)
 
     def closeEvent(self, event):
-        if self.is_text_changed():
-            if QtGui.QMessageBox.question(self, u"確認", u"内容を破棄してもよろしいですか？", QtGui.QMessageBox.Ok | QtGui.QMessageBox.Cancel) == QtGui.QMessageBox.Cancel:
-                event.ignore()
-                return
         event.accept()
 
 
@@ -155,14 +163,133 @@ class StatusBar(QtGui.QStatusBar):
             self.lbl_codec.setText(name)
 
 
+class EditorTabBar(QtGui.QTabBar):
+    def __init__(self, parent=None):
+        super(EditorTabBar, self).__init__(parent)
+        self.previous_index = -1
+        self.setShape(QtGui.QTabBar.TriangularNorth)
+        self.setMovable(True)
+
+        css = '''
+        QTabBar:tab {
+            min-width: 70px;
+            height: 20px;
+            max-width: 300px;
+        }
+        QTabBar:tab:selected {
+            color: blue;
+        }
+        '''
+        self.setStyleSheet(css)
+
+    def mousePressEvent(self, mouse_event):
+        if mouse_event.button() == QtCore.Qt.MidButton:
+            self.previous_index = self.tabAt(mouse_event.pos())
+        QtGui.QTabBar.mousePressEvent(self, mouse_event)
+
+    def mouseReleaseEvent(self, mouse_event):
+        if mouse_event.button() == QtCore.Qt.MidButton and self.previous_index == self.tabAt(mouse_event.pos()):
+            self.parentWidget().removeTab(self.previous_index)
+        self.previous_index = -1
+        QtGui.QTabBar.mouseReleaseEvent(self, mouse_event)
+
+
+class Editors(QtGui.QTabWidget):
+    def __init__(self, parent):
+        super(Editors, self).__init__(parent)
+
+        self.untitled_name_index = 0
+        self.setTabBar(EditorTabBar())
+        self.tabCloseRequested.connect(self.removeTab)
+
+    def add_editor(self, path):
+        if path:
+            filename = os.path.basename(unicode(path))
+            editor = self.get_editor_by_path(path)
+            if editor:
+                editor.setWindowState(QtCore.Qt.WindowActive)
+                editor.setFocus(QtCore.Qt.ActiveWindowFocusReason)
+                self.setCurrentWidget(editor)
+                return editor
+        else:
+            filename = self.get_untitled_name()
+
+        editor = CodeEditor(self, path)
+        self.addTab(editor, filename)
+        self.setCurrentWidget(editor)
+        if path:
+            self.setTabToolTip(self.currentIndex(), path)
+        editor.setWindowState(QtCore.Qt.WindowActive)
+        editor.setFocus(QtCore.Qt.ActiveWindowFocusReason)
+        return editor
+
+    def open_file(self, path=None, codec=None):
+        if not path:
+            path = QtGui.QFileDialog.getOpenFileName(self, u"開く", '', "Sql Files (*.sql);;All Files(*.*)")
+
+        if path:
+            codec = codec if codec else constants.DEFAULT_CODEC_NAME
+            editor = self.add_editor(path)
+            editor.codec = codec
+            in_file = QtCore.QFile(path)
+            if in_file.open(QtCore.QFile.ReadOnly | QtCore.QFile.Text):
+                text_stream = QtCore.QTextStream(in_file)
+                text_stream.setCodec(codec)
+                text = text_stream.readAll()
+                editor.bom = text_stream.generateByteOrderMark()
+                editor.codec = str(text_stream.codec().name())
+                editor.setPlainText(text)
+
+    def get_untitled_name(self):
+        self.untitled_name_index += 1
+        return constants.UNTITLED_FILE % (self.untitled_name_index,)
+
+    def get_editor_by_path(self, path):
+        if path:
+            for i in range(self.count()):
+                editor = self.widget(i)
+                if editor.path == path:
+                    return editor
+        return None
+
+    def removeTab(self, index):
+        super(Editors, self).removeTab(index)
+        if self.count() == 0:
+            self.add_editor(None)
+
+    def eventFilter(self, obj, event):
+        if event.type() == QtCore.QEvent.KeyPress:
+            if event.modifiers() == QtCore.Qt.ControlModifier:
+                if event.key() == QtCore.Qt.Key_Tab:
+                    self.move_to_next()
+                    return False  # eat alt+tab or alt+shift+tab key
+            elif event.modifiers() == (QtCore.Qt.ControlModifier | QtCore.Qt.ShiftModifier):
+                if event.key() == QtCore.Qt.Key_Tab:
+                    self.move_to_prev()
+                    return False  # eat alt+tab or alt+shift+tab key
+
+        return QtCore.QObject.eventFilter(self, obj, event)
+
+    def move_to_prev(self):
+        old_position = self.currentIndex()
+        new_position = old_position - 1 if old_position > 0 else self.count() - 1
+        self.setCurrentIndex(new_position)
+
+    def move_to_next(self):
+        old_position = self.currentIndex()
+        new_position = old_position + 1 if old_position + 1 < self.count() else 0
+        self.setCurrentIndex(new_position)
+
+
 class CodeEditor(QtGui.QPlainTextEdit):
 
-    CODEC_LIST = ['UTF-8', 'UTF-16', 'UTF-32', 'SJIS', 'GB2312']
+    CODEC_LIST = ['SJIS', 'UTF-8', 'UTF-16', 'UTF-32']
 
     def __init__(self, parent=None, path=None, codec=None):
         super(CodeEditor, self).__init__(parent)
         self.path = path
         self.codec = codec
+        self.bom = False
 
         font = QtGui.QFont()
         font.setFamily(u'ＭＳ ゴシック')
@@ -177,6 +304,8 @@ class CodeEditor(QtGui.QPlainTextEdit):
         self.line_number_area = LineNumberArea(self)
         # self.ruler_area = RulerArea(self)
 
+        self.highlighter = SqlHighlighter(self.document())
+
         self.connect(self, QtCore.SIGNAL('blockCountChanged(int)'), self.update_line_number_area_width)
         self.connect(self, QtCore.SIGNAL('updateRequest(QRect,int)'), self.update_line_number_area)
         self.connect(self, QtCore.SIGNAL('cursorPositionChanged()'), self.cursor_position_changed)
@@ -184,19 +313,77 @@ class CodeEditor(QtGui.QPlainTextEdit):
         self.update_line_number_area_width(0)
         self.highlight_current_line()
 
+        css = '''
+        QPlainTextEdit {
+            background-color: rgb(250, 250, 250);
+            border: none;
+        }
+        '''
+        self.setStyleSheet(css);
+
+    def delete_left_space(self):
+        self.delete_block_space(False)
+
     def delete_right_space(self):
         """
         行の右側（末尾）の空白を削除する。
         """
+        self.delete_block_space(True)
+
+    def delete_block_space(self, is_right):
         cursor = self.textCursor()
         if cursor.hasSelection():
-            print 'hasSelection'
+            cursor.beginEditBlock()
+            start_block, end_block = self.get_selected_blocks()
+            if start_block and end_block:
+                while start_block.isValid() and start_block.blockNumber() <= end_block.blockNumber():
+                    block_cursor = QtGui.QTextCursor(start_block)
+                    block_cursor.movePosition(QtGui.QTextCursor.EndOfBlock if is_right
+                                              else QtGui.QTextCursor.StartOfBlock,
+                                              QtGui.QTextCursor.MoveAnchor)
+                    i = 1
+                    reg = QtCore.QRegExp('\s+')
+                    while (reg.exactMatch(start_block.text().right(i)) and is_right) \
+                            or (reg.exactMatch(start_block.text().left(i)) and not is_right):
+                        block_cursor.movePosition(QtGui.QTextCursor.Left if is_right else QtGui.QTextCursor.Right,
+                                                  QtGui.QTextCursor.KeepAnchor)
+                        i += 1
+                    block_cursor.removeSelectedText()
+                    start_block = start_block.next()
+            cursor.endEditBlock()
+
+    def get_main_window(self):
+        return self.parentWidget().parentWidget().parentWidget()
 
     def get_tab_space_width(self):
         """
         タブの幅を取得する。
         """
         return self.get_char_width() * common.get_tab_space_count()
+
+    def get_line_height(self):
+        return self.fontMetrics().height()
+
+    def get_char_width(self):
+        font = self.currentCharFormat().font()
+        return round(QtGui.QFontMetricsF(font).averageCharWidth())
+
+    def get_current_row_number(self):
+        return self.textCursor().blockNumber() + 1
+
+    def get_current_col_number(self):
+        r = self.cursorRect(self.textCursor())
+        left_offset = r.left() - self.contentOffset().x() - self.document().documentMargin()
+        return int(left_offset / self.get_char_width()) + 1
+
+    def get_selected_blocks(self):
+        cursor = self.textCursor()
+        if cursor.hasSelection():
+            start_block = self.document().findBlock(cursor.selectionStart())
+            end_block = self.document().findBlock(cursor.selectionEnd() - 1)
+            return start_block, end_block
+        else:
+            return None, None
 
     def cursor_position_changed(self):
         """
@@ -217,6 +404,31 @@ class CodeEditor(QtGui.QPlainTextEdit):
         space = 10 + self.fontMetrics().width('9') * digits
         return space
 
+    def keyPressEvent(self, event):
+        if event.modifiers() == (QtCore.Qt.ControlModifier | QtCore.Qt.ShiftModifier):
+            # Ctrl + Shift
+            if event.key() == QtCore.Qt.Key_F:
+                # Ctrl + Shift + F
+                errors = self.reformat()
+                if errors:
+                    self.get_main_window().set_status_message(errors[0])
+                else:
+                    self.get_main_window().set_status_message('Success!', 3000)
+            elif event.key() == QtCore.Qt.Key_Backtab:
+                # Ctrl + Shift + Tab
+                self.parentWidget().parentWidget().move_to_prev()
+            else:
+                super(CodeEditor, self).keyPressEvent(event)
+        elif event.modifiers() == QtCore.Qt.ControlModifier:
+            # Ctrl
+            if event.key() == QtCore.Qt.Key_Tab:
+                # Ctrl + Tab
+                self.parentWidget().parentWidget().move_to_next()
+            else:
+                super(CodeEditor, self).keyPressEvent(event)
+        else:
+            super(CodeEditor, self).keyPressEvent(event)
+
     def paintEvent(self, event):
         super(CodeEditor, self).paintEvent(event)
 
@@ -225,8 +437,8 @@ class CodeEditor(QtGui.QPlainTextEdit):
             self.draw_cursor_line(QtCore.Qt.blue)
         self.draw_column_line(100, QtCore.Qt.lightGray)
         self.draw_eof_mark()
-        self.draw_return_mark()
-        self.draw_full_space()
+        self.draw_return_mark(event)
+        self.draw_full_space(event)
 
     def resizeEvent(self, event):
         QtGui.QPlainTextEdit.resizeEvent(self, event)
@@ -264,18 +476,6 @@ class CodeEditor(QtGui.QPlainTextEdit):
         if rect.contains(self.viewport().rect()):
             self.update_line_number_area_width(0)
 
-    def get_char_width(self):
-        font = self.currentCharFormat().font()
-        return round(QtGui.QFontMetricsF(font).averageCharWidth())
-
-    def get_current_row_number(self):
-        return self.textCursor().blockNumber() + 1
-
-    def get_current_col_number(self):
-        r = self.cursorRect(self.textCursor())
-        left_offset = r.left() - self.contentOffset().x() - self.document().documentMargin()
-        return int(left_offset / self.get_char_width()) + 1
-
     def draw_column_line(self, col, color):
         left = round(self.get_char_width() * col)
         left += self.contentOffset().x() + self.document().documentMargin()
@@ -302,57 +502,137 @@ class CodeEditor(QtGui.QPlainTextEdit):
         painter.setPen(QtCore.Qt.white)
         painter.drawText(QtCore.QPointF(r.left() + 2, r.bottom()), "[EOF]")
 
-    def draw_return_mark(self):
+    def draw_return_mark(self, event):
         painter = QtGui.QPainter(self.viewport())
         painter.setPen(QtGui.QColor(75, 172, 198))
+
         block = self.firstVisibleBlock()
+        top = self.blockBoundingGeometry(block).translated(self.contentOffset()).top()
+        bottom = top + self.blockBoundingRect(block).height()
+
         cur = self.textCursor()
         cur.movePosition(QtGui.QTextCursor.End)
         position_eof = cur.position()
 
-        while block.isValid():
-            cur.setPosition(block.position())
-            cur.movePosition(QtGui.QTextCursor.EndOfBlock)
-            if cur.position() == position_eof:
-                # 最後に改行がなく、EOF だった場合
-                break
-            r = self.cursorRect(cur)
-            painter.drawText(QtCore.QPointF(r.left(), r.bottom()), u"↵")
+        while block.isValid() and top <= event.rect().bottom():
+            if block.isVisible():
+                cur.setPosition(block.position())
+                cur.movePosition(QtGui.QTextCursor.EndOfBlock)
+                if cur.position() == position_eof:
+                    # 最後に改行がなく、EOF だった場合
+                    break
+                r = self.cursorRect(cur)
+                painter.drawText(QtCore.QPointF(r.left(), r.bottom()), u"↵")
 
+            top = bottom
+            bottom = top + self.blockBoundingRect(block).height()
             block = block.next()
 
-    def draw_full_space(self):
+    def draw_full_space(self, event):
         painter = QtGui.QPainter(self.viewport())
         painter.setPen(QtCore.Qt.lightGray)
-        cur = self.textCursor()
-        cur.movePosition(QtGui.QTextCursor.End)
-        reg = QtCore.QRegExp(ur'　|\t')
-        cur = self.document().find(reg, cur, QtGui.QTextDocument.FindBackward)
-        while cur.position() >= 0:
-            text = cur.selectedText()
-            cur.movePosition(QtGui.QTextCursor.Left)
-            r = self.cursorRect(cur)
-            if text == u'　':
-                painter.drawText(QtCore.QPointF(r.left(), r.bottom()), u"□")
-            elif text == '\t':
-                painter.drawText(QtCore.QPointF(r.left(), r.bottom()), u"^")
 
+        block = self.firstVisibleBlock()
+        top = self.blockBoundingGeometry(block).translated(self.contentOffset()).top()
+        bottom = top + self.blockBoundingRect(block).height()
+        reg = QtCore.QRegExp(ur'　|\t')
+
+        while block.isValid() and top <= event.rect().bottom():
+            cur = QtGui.QTextCursor(block)
+            cur.movePosition(QtGui.QTextCursor.EndOfBlock)
             cur = self.document().find(reg, cur, QtGui.QTextDocument.FindBackward)
+            text = cur.selectedText()
+            while text and cur.position() >= block.position():
+                cur.movePosition(QtGui.QTextCursor.Left)
+                r = self.cursorRect(cur)
+                if text == u'　':
+                    painter.drawText(QtCore.QPointF(r.left(), r.bottom()), u"□")
+                elif text == '\t':
+                    painter.drawText(QtCore.QPointF(r.left(), r.bottom()), u"^")
+
+                cur = self.document().find(reg, cur, QtGui.QTextDocument.FindBackward)
+                text = cur.selectedText()
+            top = bottom
+            bottom = top + self.blockBoundingRect(block).height()
+            block = block.next()
 
     def set_line_number(self):
         """
         ステータスバーの行番号と列番号を設定する。
         """
-        if hasattr(self.parentWidget(), 'status_bar'):
-            self.parentWidget().status_bar.set_line_number(self.get_current_row_number(),
-                                                           self.get_current_col_number(),
-                                                           self.textCursor().columnNumber() + 1)
+        if hasattr(self.get_main_window(), 'status_bar'):
+            self.get_main_window().status_bar.set_line_number(self.get_current_row_number(),
+                                                              self.get_current_col_number(),
+                                                              self.textCursor().columnNumber() + 1)
+
+    def select_lines(self, start_line, end_line=None):
+        block = self.document().findBlockByLineNumber(start_line)
+        if block.isValid():
+            cursor = self.textCursor()
+            cursor.setPosition(block.position(), QtGui.QTextCursor.MoveAnchor)
+            if end_line is not None:
+                # 複数行選択時
+                end_block = self.document().findBlockByLineNumber(end_line)
+                if start_line > end_line:
+                    # 上の行を選択
+                    if block.next().isValid():
+                        cursor.setPosition(block.next().position(), QtGui.QTextCursor.MoveAnchor)
+                    else:
+                        cursor.movePosition(QtGui.QTextCursor.End, QtGui.QTextCursor.MoveAnchor)
+
+                    if end_block.isValid():
+                        cursor.setPosition(end_block.position(), QtGui.QTextCursor.KeepAnchor)
+                    else:
+                        cursor.movePosition(QtGui.QTextCursor.Start, QtGui.QTextCursor.KeepAnchor)
+                else:
+                    # 下の行を選択
+                    if end_block.isValid() and end_block.next().isValid():
+                        cursor.setPosition(end_block.next().position(), QtGui.QTextCursor.KeepAnchor)
+                    else:
+                        cursor.movePosition(QtGui.QTextCursor.End, QtGui.QTextCursor.KeepAnchor)
+            else:
+                # 一行だけ選択時
+                if block.next().isValid():
+                    cursor.setPosition(block.next().position(), QtGui.QTextCursor.KeepAnchor)
+                else:
+                    cursor.select(QtGui.QTextCursor.LineUnderCursor)
+            self.setTextCursor(cursor)
 
     def setPlainText(self, text):
         super(CodeEditor, self).setPlainText(text)
         self.codec = self.codec if self.codec else 'UTF-8'
-        if hasattr(self.parentWidget(), 'status_bar'):
-            self.parentWidget().status_bar.set_codec(self.codec)
+        if hasattr(self.get_main_window(), 'status_bar'):
+            if self.bom:
+                self.get_main_window().status_bar.set_codec(self.codec + u" BOM付")
+            else:
+                self.get_main_window().status_bar.set_codec(self.codec)
+
+    def reformat(self):
+        """
+        ソース整形
+        """
+        text = self.document().toPlainText()
+        if not text:
+            return
+        # try:
+        p = SqlParser()
+        parser = p.build()
+        lex = SqlLexer()
+        lexer = lex.build()
+        result = parser.parse(unicode(text), lexer=lexer)
+        if result:
+            text = result.to_sql()
+            if not (p.errors + lex.errors):
+                cursor = QtGui.QTextCursor(self.document())
+                cursor.beginEditBlock()
+                cursor.select(QtGui.QTextCursor.Document)
+                cursor.removeSelectedText()
+                cursor.insertText(text)
+                cursor.endEditBlock()
+        return p.errors + lex.errors
+        # except Exception, ex:
+        #     print ex
+        #     return [ex.message]
 
 
 class RulerArea(QtGui.QFrame):
@@ -361,18 +641,22 @@ class RulerArea(QtGui.QFrame):
         self.editor = parent
 
 
-class LineNumberArea(QtGui.QFrame):
+class LineNumberArea(QtGui.QWidget):
     def __init__(self, parent):
         super(LineNumberArea, self).__init__(parent)
         self.editor = parent
+        self.is_dragged = False
+        self.select_start_line = -1
+        self.select_end_line = -1
 
         css = '''
-        QWidget {
+        LineNumberArea {
             font-family: "ＭＳ ゴシック";
             font-size: 12px;
             font-weight: 100;
             color: blue;
             border-right: 1px solid blue;
+            background-color: red;
         }
         '''
         self.setStyleSheet(css)
@@ -399,6 +683,24 @@ class LineNumberArea(QtGui.QFrame):
             top = bottom
             bottom = top + self.editor.blockBoundingRect(block).height()
             block_number += 1
+
+    def mousePressEvent(self, event):
+        btn = event.button()
+        if btn == QtCore.Qt.LeftButton:
+            y = event.y()
+            line_no = (y / self.editor.get_line_height())
+            self.editor.select_lines(line_no)
+            self.is_dragged = True
+            self.select_start_line = line_no
+
+    def mouseMoveEvent(self, event):
+        if self.is_dragged:
+            y = event.y()
+            line_no = (y / self.editor.get_line_height())
+            self.editor.select_lines(self.select_start_line, line_no)
+
+    def mouseReleaseEvent(self, event):
+        self.is_dragged = False
 
 
 if __name__ == '__main__':

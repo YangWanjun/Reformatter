@@ -9,3 +9,6 @@ and t1.c1 is not null
 and t1.c1 in (1,2,3)
 and t1.c1 in ('a','b','c')
 and exists (select 1 from a where c1=1 or c1=2)
+or c1 > (select a from a)
+and t1.c1 > (select a from a)
+and (select a from a) < c1

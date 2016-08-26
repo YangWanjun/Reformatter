@@ -1,0 +1,1 @@
+SELECT @retPOP = CONVERT(int,[POP_Code],0), @charBinaly & 65280

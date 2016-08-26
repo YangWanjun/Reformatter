@@ -34,17 +34,16 @@ class SqlLexer(object):
         'attach'                       : 'ATTACH',
         'attribute'                    : 'ATTRIBUTE',
         'autoregister_l'               : 'AUTOREGISTER_L',
+        'avg'                          : 'AVG',
         'backup'                       : 'BACKUP',
         'before'                       : 'BEFORE',
-        'beginx'                       : 'BEGINX',
-        'begin_call_x'                 : 'BEGIN_CALL_X',
+        'begin'                        : 'BEGIN',
         'begin_fn_x'                   : 'BEGIN_FN_X',
         'begin_u_x'                    : 'BEGIN_U_X',
         'between'                      : 'BETWEEN',
         'binary'                       : 'BINARY',
         'binarynum'                    : 'BINARYNUM',
         'by'                           : 'BY',
-        'c'                            : 'C',
         'call'                         : 'CALL',
         'called'                       : 'CALLED',
         'cascade'                      : 'CASCADE',
@@ -66,9 +65,9 @@ class SqlLexer(object):
         'constraint'                   : 'CONSTRAINT',
         'constructor'                  : 'CONSTRUCTOR',
         'contains'                     : 'CONTAINS',
-        'continue'                     : 'CONTINUE',
         'convert'                      : 'CONVERT',
         'corresponding'                : 'CORRESPONDING',
+        'count'                        : 'COUNT',
         'create'                       : 'CREATE',
         'cross'                        : 'CROSS',
         'cube'                         : 'CUBE',
@@ -83,7 +82,7 @@ class SqlLexer(object):
         'decimal'                      : 'DECIMAL',
         'declare'                      : 'DECLARE',
         'default'                      : 'DEFAULT',
-        'delete_l'                     : 'DELETE_L',
+        'delete'                       : 'DELETE',
         'desc'                         : 'DESC',
         'deterministic'                : 'DETERMINISTIC',
         'disconnect'                   : 'DISCONNECT',
@@ -102,7 +101,6 @@ class SqlLexer(object):
         'exclusive'                    : 'EXCLUSIVE',
         'execute'                      : 'EXECUTE',
         'exists'                       : 'EXISTS',
-        'exit'                         : 'EXIT',
         'external'                     : 'EXTERNAL',
         'extract'                      : 'EXTRACT',
         'fetch'                        : 'FETCH',
@@ -123,7 +121,6 @@ class SqlLexer(object):
         'grant'                        : 'GRANT',
         'group'                        : 'GROUP',
         'grouping'                     : 'GROUPING',
-        'handler'                      : 'HANDLER',
         'hash'                         : 'HASH',
         'having'                       : 'HAVING',
         'htmlstr'                      : 'HTMLSTR',
@@ -140,6 +137,7 @@ class SqlLexer(object):
         'insert'                       : 'INSERT',
         'instance_l'                   : 'INSTANCE_L',
         'instead'                      : 'INSTEAD',
+        'int'                          : 'INT',
         'integer'                      : 'INTEGER',
         'internal'                     : 'INTERNAL',
         'intersect'                    : 'INTERSECT',
@@ -156,11 +154,12 @@ class SqlLexer(object):
         'left'                         : 'LEFT',
         'library_l'                    : 'LIBRARY_L',
         'like'                         : 'LIKE',
-        'locator'                      : 'LOCATOR',
         'logx'                         : 'LOGX',
         'long'                         : 'LONG',
         'loop'                         : 'LOOP',
+        'max'                          : 'MAX',
         'method'                       : 'METHOD',
+        'min'                          : 'MIN',
         'modifies'                     : 'MODIFIES',
         'modify'                       : 'MODIFY',
         'module'                       : 'MODULE',
@@ -170,11 +169,11 @@ class SqlLexer(object):
         'mssql_xmlcol_nameyz'          : 'MSSQL_XMLCOL_NAMEYZ',
         'mssql_xmlcol_namez'           : 'MSSQL_XMLCOL_NAMEZ',
         'mumps'                        : 'MUMPS',
-        'name'                         : 'NAME',
         'name_l'                       : 'NAME_L',
         'natural'                      : 'NATURAL',
         'nchar'                        : 'NCHAR',
         'new'                          : 'NEW',
+        'next'                         : 'NEXT',
         'no'                           : 'NO',
         'nonincremental'               : 'NONINCREMENTAL',
         'not'                          : 'NOT',
@@ -194,6 +193,7 @@ class SqlLexer(object):
         'order'                        : 'ORDER',
         'outer'                        : 'OUTER',
         'out_l'                        : 'OUT_L',
+        'over'                         : 'OVER',
         'overriding'                   : 'OVERRIDING',
         'parameter'                    : 'PARAMETER',
         'pascal_l'                     : 'PASCAL_L',
@@ -219,7 +219,6 @@ class SqlLexer(object):
         'replication'                  : 'REPLICATION',
         'resignal'                     : 'RESIGNAL',
         'restrict'                     : 'RESTRICT',
-        'result'                       : 'RESULT',
         'return'                       : 'RETURN',
         'returns'                      : 'RETURNS',
         'revoke'                       : 'REVOKE',
@@ -228,6 +227,7 @@ class SqlLexer(object):
         'role_l'                       : 'ROLE_L',
         'rollback'                     : 'ROLLBACK',
         'rollup'                       : 'ROLLUP',
+        'row_number'                   : 'ROW_NUMBER',
         'safe_l'                       : 'SAFE_L',
         'schema'                       : 'SCHEMA',
         'select'                       : 'SELECT',
@@ -249,6 +249,7 @@ class SqlLexer(object):
         'static_l'                     : 'STATIC_L',
         'string_concat_operator'       : 'STRING_CONCAT_OPERATOR',
         'style'                        : 'STYLE',
+        'sum'                          : 'SUM',
         'sync'                         : 'SYNC',
         'system'                       : 'SYSTEM',
         'table'                        : 'TABLE',
@@ -293,30 +294,75 @@ class SqlLexer(object):
         '__soap_header'                : '__SOAP_HEADER',
         '__soap_http'                  : '__SOAP_HTTP',
         '__soap_name'                  : '__SOAP_NAME',
-        '__soap_options'               : '__SOAP_OPTIONS',
         '__soap_type'                  : '__SOAP_TYPE',
         '__soap_xml_type'              : '__SOAP_XML_TYPE',
     }
 
-    tokens = ['NUMBER',
-              'ID',         'COLON',    'AT',   'QUESTION',
-              'STRING',     'PERIOD',
-              'COMMA',      'SEMI',
-              'PLUS',       'MINUS',
-              'TIMES',      'DIVIDE',
-              'LPAREN',     'RPAREN',
-              #'GT',         'GE',
-              #'LT',         'LE',
-              'EQUALS',     #'NE',
-              'LBRACKET',   'RBRACKET',
-              'SEMICOLON',  'COMPARISON',
-              ] + list(reserved.values())
+    tokens = ['AT',
+              'BITAND',
+              'BITNOT',
+              'BITOR',
+              'COLON',
+              'COMMA',
+              'DIVIDE',
+              'EQ',
+              'GE',
+              'GT',
+              'ID',
+              'LBRACKET',
+              'LE',
+              'LPAREN',
+              'LT',
+              'MINUS',
+              'NE',
+              'NUMBER',
+              'PERIOD',
+              'PLUS',
+              'QUESTION',
+              'RBRACKET',
+              'RPAREN',
+              'SEMI',
+              'STRING',
+              'TIMES',
+             ] + list(reserved.values())
+
+    t_ignore  = ' \t'
+
+    #literals = ['+', '-', '*', '/', '>', '>=', '<', '<=', '=', '!=']
+    # Regular expression rules for simple tokens
+    t_COLON       = r':'
+    t_AT          = r'@'
+    t_BITAND      = r'\&'
+    t_BITNOT      = r'\~'
+    t_BITOR       = r'\|'
+    t_QUESTION    = r'\?'
+    t_PERIOD      = r'\.'
+    t_COMMA       = r'\,'
+    t_SEMI        = r'\;'
+    t_PLUS        = r'\+'
+    t_MINUS       = r'-'
+    t_TIMES       = r'\*'
+    t_DIVIDE      = r'/'
+    t_LPAREN      = r'\('
+    t_RPAREN      = r'\)'
+    t_LBRACKET    = r'\['
+    t_RBRACKET    = r'\]'
+    t_GT         = r'>'
+    t_GE         = r'>='
+    t_LT         = r'<'
+    t_LE         = r'<='
+    t_EQ      = r'\='
+    t_NE         = r'!=|<>'
+    #t_COMPARISON  = r'(>=|<=|!=|<>|>|<|=)'
+
+    def __init__(self):
+        self.errors = []
 
     def t_NUMBER(self, t):
         # TODO: see http://docs.python.org/reference/lexical_analysis.html
         # for what Python accepts, then use eval
-        r'\d+'
-        t.value = int(t.value)
+        r'0x[0-9A-Fa-f]+|\d+'
+        #t.value = int(t.value)
         return t
 
     def t_ID(self, t):
@@ -347,40 +393,11 @@ class SqlLexer(object):
         r'\n+'
         t.lexer.lineno += len(t.value)
 
-    t_ignore  = ' \t'
-
-    #literals = ['+', '-', '*', '/', '>', '>=', '<', '<=', '=', '!=']
-    # Regular expression rules for simple tokens
-    t_COLON       = r':'
-    t_AT          = r'@'
-    t_QUESTION    = r'\?'
-    t_PERIOD      = r'\.'
-    t_COMMA       = r'\,'
-    t_SEMI        = r';'
-    t_PLUS        = r'\+'
-    t_MINUS       = r'-'
-    t_TIMES       = r'\*'
-    t_DIVIDE      = r'/'
-    t_LPAREN      = r'\('
-    t_RPAREN      = r'\)'
-    t_LBRACKET    = r'\['
-    t_RBRACKET    = r'\]'
-    #t_GT          = r'>'
-    #t_GE          = r'>='
-    #t_LT          = r'<'
-    #t_LE          = r'<='
-    t_EQUALS      = r'='
-    #t_NE          = r'!=|<>'
-    t_SEMICOLON   = r';'
-    t_COMPARISON  = r'>|>=|<|<=|=|!=|<>'
-
-    def __init__(self):
-        self.errors = []
-
     def t_error(self, t):
         # raise TypeError("Unknown text '%s'" % (t.value,))
-        # message = u"キーワード '%s' 付近に不適切な構文があります。" % (t.value,)
-        self.errors.append("aaa")
+        message = u"キーワード '%s' 付近に不適切な構文があります。" % (t.value,)
+        self.errors.append(message)
+        t.lexer.skip(1)
 
     def build(self, **kwargs):
         self.lexer = lex.lex(module=self, **kwargs)
@@ -416,7 +433,7 @@ class Node(object):
 
     def to_sql(self):
         name_list = self.get_children_name()
-        #print ', '.join(list(set(name_list)))
+        # print ', '.join(list(set(name_list)))
         return self.sql
 
     def get_children_name(self):
@@ -453,8 +470,7 @@ class SqlParser(object):
 
     def p_sql_list(self, p):
         """
-        sql_list : sql_list1 SEMICOLON
-                 | sql_list1
+        sql_list : sql_list1
         """
         if len(p) == 2:
             sql = p[1].sql
@@ -465,9 +481,33 @@ class SqlParser(object):
     def p_sql_list1(self, p):
         """
         sql_list1 : sql
+                  | sql_list1 SEMI
+                  | sql_list1 SEMI sql
+                  | sql_list1 go_statement
+                  | sql_list1 go_statement sql_list1
         """
-        sql = p[1].sql
+        if len(p) == 2:
+            sql = p[1].sql
+        elif len(p) == 3:
+            if isinstance(p[2], Node):
+                sql = '%s\n\n%s' % (p[1].sql, p[2].sql)
+            else:
+                sql = '%s;' % (p[1].sql,)
+        else:
+            if isinstance(p[2], Node):
+                sql = '%s\n%s\n%s' % (p[1].sql, p[2].sql, p[3].sql)
+            else:
+                sql = '%s;\n\n%s' % (p[1].sql, p[3].sql)
         p[0] = Node('sql_list1', p, sql)
+
+    def p_go_statement(self, p):
+        """
+        go_statement : GO NUMBER
+                     | GO
+        """
+        s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
+        sql = ' '.join(s_list) + '\n'
+        p[0] = Node('go_statement', p, sql)
 
     def p_sql(self, p):
         """
@@ -529,8 +569,7 @@ class SqlParser(object):
         """
         base_table_def : CREATE TABLE new_table_name LPAREN base_table_element_commalist RPAREN
         """
-        s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
-        sql = ' '.join(s_list)
+        sql = '%s %s %s\n(\n%s\n)' % (p[1], p[2], p[3].sql, p[5].sql)
         p[0] = Node('base_table_def', p, sql)
 
     def p_base_table_element_commalist(self, p):
@@ -538,8 +577,10 @@ class SqlParser(object):
         base_table_element_commalist : base_table_element
                                      | base_table_element_commalist COMMA base_table_element
         """
-        s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
-        sql = ' '.join(s_list)
+        if len(p) == 2:
+            sql = '    %s' % (p[1].sql,)
+        else:
+            sql = '%s,\n    %s' % (p[1].sql, p[3].sql)
         p[0] = Node('base_table_element_commalist', p, sql)
 
     def p_base_table_element(self, p):
@@ -555,8 +596,7 @@ class SqlParser(object):
         """
         column_def : column column_data_type column_def_opt_list
         """
-        s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
-        sql = ' '.join(s_list)
+        sql = '%s %s%s' % (p[1].sql, p[2].sql, ' ' + p[3].sql if p[3].sql else '')
         p[0] = Node('column_def', p, sql)
 
     def p_opt_referential_triggered_action(self, p):
@@ -584,7 +624,7 @@ class SqlParser(object):
 
     def p_delete_referential_rule(self, p):
         """
-        delete_referential_rule : ON DELETE_L referential_action
+        delete_referential_rule : ON DELETE referential_action
         """
         s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
         sql = ' '.join(s_list)
@@ -650,8 +690,8 @@ class SqlParser(object):
 
     def p_column_def_opt(self, p):
         """
-        column_def_opt : NOT NULLX
-                       | NULLX
+        column_def_opt : NOT NULL
+                       | NULL
                        | IDENTITY
                        | IDENTITY LPAREN identity_opt_list RPAREN
                        | PRIMARY KEY
@@ -704,8 +744,10 @@ class SqlParser(object):
         column_commalist : column
                          | column_commalist COMMA column
         """
-        s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
-        sql = ' '.join(s_list)
+        if len(p) == 2:
+            sql = p[1].sql
+        else:
+            sql = '%s\n     , %s' % (p[1].sql, p[3].sql)
         p[0] = Node('column_commalist', p, sql)
 
     def p_index_column_commalist(self, p):
@@ -921,9 +963,9 @@ class SqlParser(object):
                                   |
         """
         if len(p) == 1:
-           sql = ''
+            sql = ''
         else:
-           sql = '(%s)' % (p[2].sql,)
+            sql = '\n     ( %s\n     )' % (p[2].sql,)
         p[0] = Node('priv_opt_column_commalist', p, sql)
 
     def p_privilege_def(self, p):
@@ -994,7 +1036,7 @@ class SqlParser(object):
         """
         operation : SELECT priv_opt_column_commalist
                   | INSERT
-                  | DELETE_L
+                  | DELETE
                   | UPDATE priv_opt_column_commalist
                   | REFERENCES priv_opt_column_commalist
         """
@@ -1039,8 +1081,8 @@ class SqlParser(object):
 
     def p_delete_user_statement(self, p):
         """
-        delete_user_statement : DELETE_L USER user
-                              | DELETE_L USER user CASCADE
+        delete_user_statement : DELETE USER user
+                              | DELETE USER user CASCADE
                               | DROP USER user
                               | DROP USER user CASCADE
                               | DROP ROLE_L user
@@ -1067,7 +1109,7 @@ class SqlParser(object):
 
     def p_delete_group_stmt(self, p):
         """
-        delete_group_stmt : DELETE_L USER GROUP user user
+        delete_group_stmt : DELETE USER GROUP user user
         """
         s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
         sql = ' '.join(s_list)
@@ -1162,7 +1204,10 @@ class SqlParser(object):
         if len(p) == 1:
             sql = ''
         else:
-            sql = '%s %s %s' % (p[1], p[2], p[3].sql)
+            sql_ordering_spec_commalist = p[3].sql
+            if sql_ordering_spec_commalist.find('\n') >= 0:
+                sql_ordering_spec_commalist = common.set_indent(p[3].set_list_break('ordering_spec'), ' ' * 5)
+            sql = '\n %s %s %s' % (p[1], p[2], sql_ordering_spec_commalist)
         p[0] = Node('opt_order_by_clause', p, sql)
 
     def p_ordering_spec_commalist(self, p):
@@ -1171,7 +1216,7 @@ class SqlParser(object):
                                 | ordering_spec_commalist COMMA ordering_spec
         """
         if len(p) == 2:
-            sql = p[1]
+            sql = p[1].sql
         else:
             sql = '%s, %s' % (p[1].sql, p[3].sql)
         p[0] = Node('ordering_spec_commalist', p, sql)
@@ -1181,7 +1226,8 @@ class SqlParser(object):
         ordering_spec : scalar_exp opt_asc_desc
                       | mssql_xml_col opt_asc_desc
         """
-        sql = '%s %s' % (p[1].sql, p[2].sql)
+        sql_opt_asc_desc = ' ' + p[2].sql if p[2].sql else ''
+        sql = '%s%s' % (p[1].sql, sql_opt_asc_desc)
         p[0] = Node('ordering_spec', p, sql)
 
     def p_opt_asc_desc(self, p):
@@ -1253,7 +1299,7 @@ class SqlParser(object):
 
     def p_opt_with_delete(self, p):
         """
-        opt_with_delete : WITH DELETE_L
+        opt_with_delete : WITH DELETE
                         |
         """
         if len(p) == 1:
@@ -1438,7 +1484,10 @@ class SqlParser(object):
         """
         use_statement : USE identifier
         """
-        sql = '%s %s' % (p[1], p[2].sql)
+        if len(p) == 3:
+           sql = '%s %s' % (p[1], p[2].sql)
+        else:
+           sql = '%s %s;' % (p[1], p[2].sql)
         p[0] = Node('use_statement', p, sql)
 
     def p_close_statement(self, p):
@@ -1457,30 +1506,23 @@ class SqlParser(object):
 
     def p_delete_statement_positioned(self, p):
         """
-        delete_statement_positioned : DELETE_L FROM table WHERE CURRENT OF cursor
+        delete_statement_positioned : DELETE FROM table WHERE CURRENT OF cursor
         """
         sql = '%s %s %s %s %s %s %s' % (p[1], p[2], p[3].sql, p[4], p[5], p[6], p[7].sql)
         p[0] = Node('delete_statement_positioned', p, sql)
 
     def p_delete_statement_searched(self, p):
         """
-        delete_statement_searched : DELETE_L FROM table opt_where_clause
+        delete_statement_searched : DELETE FROM table opt_where_clause
         """
         sql = '%s %s %s %s' % (p[1], p[2], p[3].sql, p[4].sql)
         p[0] = Node('delete_statement_searched', p, sql)
 
     def p_fetch_statement(self, p):
         """
-        fetch_statement : FETCH cursor INTO target_commalist
-                        | FETCH cursor NAME INTO target_commalist
-                        | FETCH cursor NAME scalar_exp INTO target_commalist
+        fetch_statement : FETCH NEXT FROM cursor INTO target_commalist
         """
-        if len(p) == 5:
-            sql = '%s %s %s %s' % (p[1], p[2].sql, p[3], p[4].sql)
-        elif len(p) == 6:
-            sql = '%s %s %s %s %s' % (p[1], p[2].sql, p[3], p[4], p[5].sql)
-        else:
-            sql = '%s %s %s %s %s %s' % (p[1], p[2].sql, p[3], p[4].sql, p[5], p[6].sql)
+        sql = ' '.join([i.sql if isinstance(i, Node) else i for i in p[1:]])
         p[0] = Node('fetch_statement', p, sql)
 
     def p_insert_mode(self, p):
@@ -1496,7 +1538,8 @@ class SqlParser(object):
         """
         insert_statement : INSERT insert_mode table priv_opt_column_commalist values_or_query_spec
         """
-        sql = '%s %s %s %s %s' % (p[1], p[2].sql, p[3].sql, p[4].sql, p[5].sql)
+        sql_priv_opt_column_commalist = ' ' + p[4].sql if p[4].sql else ''
+        sql = '%s %s %s%s %s' % (p[1], p[2].sql, p[3].sql, sql_priv_opt_column_commalist, p[5].sql)
         p[0] = Node('insert_statement', p, sql)
 
     def p_values_or_query_spec(self, p):
@@ -1507,7 +1550,7 @@ class SqlParser(object):
         if len(p) == 2:
             sql = p[1].sql
         else:
-            sql = '%s (%s)' % (p[1], p[3].sql)
+            sql = '\n%s \n     ( %s\n     )' % (p[1], p[3].sql)
         p[0] = Node('values_or_query_spec', p, sql)
 
     def p_insert_atom_commalist(self, p):
@@ -1518,15 +1561,17 @@ class SqlParser(object):
         if len(p) == 2:
             sql = p[1].sql
         else:
-            sql = '%s %s' % (p[1].sql, p[3].sql)
+            sql = '%s\n     , %s' % (p[1].sql, p[3].sql)
         p[0] = Node('insert_atom_commalist', p, sql)
 
     def p_insert_atom(self, p):
         """
         insert_atom : scalar_exp
         """
-        sql = p[1].sql
-        p[0] = Node('insert_atom', p, sql)
+        sql_insert_atom = p[1].sql
+        if str(sql_insert_atom).find('\n') >= 0:
+            sql_insert_atom = common.set_indent(sql_insert_atom, ' ' * 5)
+        p[0] = Node('insert_atom', p, sql_insert_atom)
 
     def p_sql_option(self, p):
         """
@@ -1536,7 +1581,6 @@ class SqlParser(object):
                    | INDEX identifier
                    | INDEX PRIMARY KEY
                    | INDEX TEXT_L KEY
-                   | NAME NUMBER
         """
         if len(p) == 2:
             sql = p[1]
@@ -1697,21 +1741,25 @@ class SqlParser(object):
         elif len(p) == 2:
             sql = p[1].sql
         else:
-            sql = '%s, %s' % (p[1].sql, p[3].sql)
+            sql = '%s\n     , %s' % (p[1].sql, p[3].sql)
         p[0] = Node('assignment_commalist', p, sql)
 
     def p_assignment(self, p):
         """
-        assignment : column COMPARISON scalar_exp
+        assignment : column comparison scalar_exp
         """
-        sql = '%s %s %s' % (p[1].sql, p[2], p[3].sql)
+        sql_scalar_exp = p[3].sql
+        if str(sql_scalar_exp).find('\n') >= 0:
+            length = len(str(p[1].sql)) + len(p[2].sql) + 2 + 5
+            sql_scalar_exp = common.set_indent(sql_scalar_exp, ' ' * length)
+        sql = '%s %s %s' % (p[1].sql, p[2].sql, sql_scalar_exp)
         p[0] = Node('assignment', p, sql)
 
     def p_update_statement_searched(self, p):
         """
         update_statement_searched : UPDATE table SET assignment_commalist opt_where_clause
         """
-        sql = '%s %s %s %s %s' % (p[1], p[2].sql, p[3], p[4].sql, p[5].sql)
+        sql = '%s %s \n   %s %s %s' % (p[1], p[2].sql, p[3], p[4].sql, p[5].sql)
         p[0] = Node('update_statement_searched', p, sql)
 
     def p_target_commalist(self, p):
@@ -1728,6 +1776,7 @@ class SqlParser(object):
     def p_target(self, p):
         """
         target : column_ref
+               | parameter
                | member_observer
                | lvalue_array_ref
         """
@@ -1846,14 +1895,24 @@ class SqlParser(object):
         """
         non_final_table_exp : from_clause opt_where_clause opt_group_by_clause opt_having_clause
         """
-        sql = '%s %s %s %s' % (p[1].sql, p[2].sql, p[3].sql, p[4].sql)
+        sql_opt_where_clause = ' ' + p[2].sql if p[2].sql else ''
+        sql_opt_group_by_clause = ' ' + p[3].sql if p[3].sql else ''
+        sql_opt_having_clause = ' ' + p[4].sql if p[4].sql else ''
+        sql = '%s%s%s%s' % (p[1].sql, sql_opt_where_clause, sql_opt_group_by_clause, sql_opt_having_clause)
         p[0] = Node('non_final_table_exp', p, sql)
 
     def p_table_exp(self, p):
         """
         table_exp : from_clause opt_where_clause opt_group_by_clause opt_having_clause opt_order_by_clause opt_lock_mode opt_sql_opt
         """
-        sql = '\n  %s %s %s %s %s %s' % (p[1].sql, p[2].sql, p[3].sql, p[4].sql, p[5].sql, p[6].sql)
+        sql_opt_where_clause = ' ' + p[2].sql if p[2].sql else ''
+        sql_opt_group_by_clause = ' ' + p[3].sql if p[3].sql else ''
+        sql_opt_having_clause = ' ' + p[4].sql if p[4].sql else ''
+        sql_opt_order_by_clause = ' ' + p[5].sql if p[5].sql else ''
+        sql_opt_lock_mode = ' ' + p[6].sql if p[6].sql else ''
+        sql_opt_sql_opt = ' ' + p[7].sql if p[7].sql else ''
+        sql = '\n  %s%s%s%s%s%s%s' % (p[1].sql, sql_opt_where_clause, sql_opt_group_by_clause, sql_opt_having_clause, 
+                                      sql_opt_order_by_clause, sql_opt_lock_mode, sql_opt_sql_opt)
         p[0] = Node('table_exp', p, sql)
 
     def p_from_clause(self, p):
@@ -2037,9 +2096,12 @@ class SqlParser(object):
         if len(p) == 1:
             sql = ''
         elif len(p) == 4:
-            sql = '%s %s %s' % (p[1], p[2], p[3].sql)
+            sql_ordering_spec_commalist = p[3].sql
+            if sql_ordering_spec_commalist.find('\n') >= 0:
+                sql_ordering_spec_commalist = common.set_indent(p[3].set_list_break('ordering_spec'), ' ' * 5)
+            sql = '\n %s %s %s' % (p[1], p[2], sql_ordering_spec_commalist)
         else:
-            sql = '%s %s %s (%s)' % (p[1], p[2], p[3], p[5].sql)
+            sql = '\n %s %s %s (%s)' % (p[1], p[2], p[3], p[5].sql)
         p[0] = Node('opt_group_by_clause', p, sql)
 
     def p_opt_having_clause(self, p):
@@ -2056,8 +2118,6 @@ class SqlParser(object):
     def p_opt_lock_mode(self, p):
         """
         opt_lock_mode : FOR UPDATE
-                      | FOR XML NAME
-                      | FOR XML NAME NAME
                       |
         """
         if len(p) == 1:
@@ -2109,9 +2169,12 @@ class SqlParser(object):
 
     def p_comparison_predicate(self, p):
         """
-        comparison_predicate : scalar_exp COMPARISON scalar_exp
+        comparison_predicate : scalar_exp comparison scalar_exp
         """
-        sql = '%s %s %s' % (p[1].sql, p[2], p[3].sql)
+        sql_scalar_exp1 = common.set_indent(p[1].sql, ' ' * 5)
+        indent = len(unicode(sql_scalar_exp1).split('\n')[-1]) + 2 + len(p[2].sql) + 5
+        sql_scalar_exp2 = common.set_indent(p[3].sql, ' ' * indent)
+        sql = '%s %s %s' % (sql_scalar_exp1, p[2].sql, sql_scalar_exp2)
         p[0] = Node('comparison_predicate', p, sql)
 
     def p_between_predicate(self, p):
@@ -2139,7 +2202,7 @@ class SqlParser(object):
     def p_opt_escape(self, p):
         """
         opt_escape : ESCAPE atom
-                   | BEGINX ESCAPE atom END
+                   | BEGIN ESCAPE atom END
                    |
         """
         if len(p) == 1:
@@ -2180,9 +2243,9 @@ class SqlParser(object):
 
     def p_all_or_any_predicate(self, p):
         """
-        all_or_any_predicate : scalar_exp COMPARISON any_all_some subquery
+        all_or_any_predicate : scalar_exp comparison any_all_some subquery
         """
-        sql = '%s %s %s %s' % (p[1].sql, p[2], p[3].sql, p[4].sql)
+        sql = '%s %s %s %s' % (p[1].sql, p[2].sql, p[3].sql, p[4].sql)
         p[0] = Node('all_or_any_predicate', p, sql)
 
     def p_any_all_some(self, p):
@@ -2223,13 +2286,17 @@ class SqlParser(object):
                    | scalar_exp PLUS scalar_exp
                    | scalar_exp TIMES scalar_exp
                    | scalar_exp DIVIDE scalar_exp
+                   | scalar_exp BITAND scalar_exp
+                   | scalar_exp BITOR scalar_exp
                    | PLUS scalar_exp
                    | MINUS scalar_exp
+                   | BITNOT scalar_exp
                    | assignment_statement
                    | string_concatenation_operator
                    | column_ref
                    | scalar_exp_no_col_ref
                    | obe_literal
+                   | set_function_specification
         """
         if len(p) == 2:
             sql = p[1].sql
@@ -2238,6 +2305,29 @@ class SqlParser(object):
         else:
             sql = '%s %s %s' % (p[1].sql, p[2], p[3].sql)
         p[0] = Node('scalar_exp', p, sql)
+
+    def p_set_function_specification(self, p):
+        """
+        set_function_specification : COUNT LPAREN TIMES RPAREN
+                                   | general_set_function
+        """
+        if len(p) == 5:
+            sql = '%s(*)' % (p[1],)
+        else:
+            sql = p[1].sql
+        p[0] = Node('set_function_specification', p, sql)
+
+    def p_general_set_function(self, p):
+        """
+        general_set_function : AVG LPAREN opt_all_distinct scalar_exp RPAREN
+                             | MAX LPAREN opt_all_distinct scalar_exp RPAREN
+                             | MIN LPAREN opt_all_distinct scalar_exp RPAREN
+                             | SUM LPAREN opt_all_distinct scalar_exp RPAREN
+                             | COUNT LPAREN opt_all_distinct scalar_exp RPAREN
+        """
+        sql_opt_all_distinct = p[3].sql + ' ' if p[3].sql else ''
+        sql = '%s(%s%s)' % (p[1], sql_opt_all_distinct, p[4].sql)
+        p[0] = Node('general_set_function', p, sql)
 
     def p_scalar_exp_no_col_ref(self, p):
         """
@@ -2258,6 +2348,7 @@ class SqlParser(object):
                               | static_method_invocation
                               | method_invocation
                               | member_observer
+                              | row_number
         """
         if len(p) == 2:
             sql = p[1].sql
@@ -2451,19 +2542,14 @@ class SqlParser(object):
         """
         function_call : function_name LPAREN opt_arg_commalist RPAREN
                       | TIMESTAMP_FUNC LPAREN SQL_TSI COMMA scalar_exp COMMA scalar_exp RPAREN
-                      | EXTRACT LPAREN NAME FROM scalar_exp RPAREN
                       | BEGIN_FN_X identifier LPAREN opt_scalar_exp_commalist RPAREN END
                       | BEGIN_FN_X LEFT LPAREN opt_scalar_exp_commalist RPAREN END
                       | BEGIN_FN_X RIGHT LPAREN opt_scalar_exp_commalist RPAREN END
                       | BEGIN_FN_X LOGX LPAREN opt_scalar_exp_commalist RPAREN END
                       | BEGIN_FN_X identifier LPAREN scalar_exp IN_L scalar_exp RPAREN END
-                      | BEGIN_CALL_X function_name LPAREN opt_scalar_exp_commalist RPAREN END
-                      | BEGIN_CALL_X function_name END
                       | BEGIN_FN_X USER LPAREN opt_scalar_exp_commalist RPAREN END
                       | BEGIN_FN_X CHARACTER LPAREN opt_scalar_exp_commalist RPAREN END
                       | BEGIN_FN_X TIMESTAMP_FUNC LPAREN SQL_TSI COMMA scalar_exp COMMA scalar_exp RPAREN END
-                      | BEGIN_FN_X CONVERT LPAREN scalar_exp COMMA NAME RPAREN END
-                      | BEGIN_FN_X EXTRACT LPAREN NAME FROM scalar_exp RPAREN END
                       | CALL LPAREN scalar_exp RPAREN LPAREN opt_arg_commalist RPAREN
                       | CURRENT_DATE
                       | CURRENT_TIME
@@ -2501,7 +2587,7 @@ class SqlParser(object):
 
     def p_obe_literal(self, p):
         """
-        obe_literal : BEGINX identifier atom END
+        obe_literal : BEGIN identifier atom END
                     | BEGIN_U_X STRING END
         """
         if len(p) == 4:
@@ -2820,59 +2906,98 @@ class SqlParser(object):
     def p_base_data_type(self, p):
         """
         base_data_type : NUMERIC
-                       | NUMERIC LPAREN NUMBER RPAREN
-                       | NUMERIC LPAREN NUMBER COMMA NUMBER RPAREN
+                       | NUMERIC data_type_length1
+                       | NUMERIC data_type_length2
                        | DECIMAL
-                       | DECIMAL LPAREN NUMBER RPAREN
-                       | DECIMAL LPAREN NUMBER COMMA NUMBER RPAREN
+                       | DECIMAL data_type_length1
+                       | DECIMAL data_type_length2
                        | INTEGER
+                       | INT
                        | SMALLINT
                        | FLOAT
-                       | FLOAT LPAREN NUMBER RPAREN
                        | REAL
                        | DOUBLE PRECISION
-                       | LONG VARCHAR
                        | LONG VARBINARY
                        | VARBINARY
-                       | VARBINARY LPAREN NUMBER RPAREN
-                       | BINARY LPAREN NUMBER RPAREN
+                       | VARBINARY data_type_length1
+                       | BINARY data_type_length1
                        | TIMESTAMP
                        | DATETIME
                        | TIME
                        | DATE
                        | CHAR
-                       | CHAR LPAREN NUMBER RPAREN
+                       | CHAR data_type_length1
                        | NCHAR
-                       | NCHAR LPAREN NUMBER RPAREN
+                       | NCHAR data_type_length1
                        | NVARCHAR
-                       | NVARCHAR LPAREN NUMBER RPAREN
-                       | LONG NVARCHAR
-                       | ANY
-                       | ANY LPAREN NUMBER RPAREN
+                       | NVARCHAR data_type_length1
+                       | LBRACKET NUMERIC RBRACKET
+                       | LBRACKET NUMERIC RBRACKET data_type_length1
+                       | LBRACKET NUMERIC RBRACKET data_type_length2
+                       | LBRACKET DECIMAL RBRACKET
+                       | LBRACKET DECIMAL RBRACKET data_type_length1
+                       | LBRACKET DECIMAL RBRACKET data_type_length2
+                       | LBRACKET INTEGER RBRACKET
+                       | LBRACKET INT RBRACKET
+                       | LBRACKET SMALLINT RBRACKET
+                       | LBRACKET FLOAT RBRACKET
+                       | LBRACKET REAL RBRACKET
+                       | LBRACKET LONG VARBINARY
+                       | LBRACKET VARBINARY RBRACKET
+                       | LBRACKET VARBINARY RBRACKET data_type_length1
+                       | LBRACKET BINARY RBRACKET data_type_length1
+                       | LBRACKET TIMESTAMP RBRACKET
+                       | LBRACKET DATETIME RBRACKET
+                       | LBRACKET TIME RBRACKET
+                       | LBRACKET DATE RBRACKET
+                       | LBRACKET CHAR RBRACKET
+                       | LBRACKET CHAR RBRACKET data_type_length1
+                       | LBRACKET NCHAR RBRACKET
+                       | LBRACKET NCHAR RBRACKET data_type_length1
+                       | LBRACKET NVARCHAR RBRACKET
+                       | LBRACKET NVARCHAR RBRACKET data_type_length1
         """
         if len(p) == 2:
             sql = p[1]
         elif len(p) == 3:
-            sql = '%s %s' % (p[1], p[2])
-        elif len(p) == 5:
-            sql = '%s(%s)' % (p[1], p[3])
+            if isinstance(p[2], Node):
+                sql = '%s%s' % (p[1], p[2].sql)
+            else:
+                sql = '%s %s' % (p[1], p[2])
+        elif len(p) == 4:
+            sql = '[%s]' % (p[2],)
         else:
-            sql = '%s(%s, %s)' % (p[1], p[3], p[5])
-        p[0] = Node('column_ref', p, sql)
+            sql = '[%s]%s' % (p[2], p[4].sql)
+        p[0] = Node('base_data_type', p, sql)
 
     def p_data_type(self, p):
         """
         data_type : base_data_type
                   | CHARACTER
                   | VARCHAR
-                  | VARCHAR LPAREN NUMBER RPAREN
-                  | CHARACTER LPAREN NUMBER RPAREN
+                  | VARCHAR data_type_length1
+                  | CHARACTER data_type_length1
         """
         if len(p) == 2:
             sql = p[1].sql if isinstance(p[1], Node) else p[1]
         else:
-            sql = '%s (%s)' % (p[1], p[3])
+            sql = '%s%s' % (p[1], p[2].sql)
         p[0] = Node('data_type', p, sql)
+
+    def p_data_type_length1(self, p):
+        """
+        data_type_length1 : LPAREN NUMBER RPAREN
+                          | LPAREN MAX RPAREN
+        """
+        sql = '(%s)' % (p[2],)
+        p[0] = Node('data_type_length1', p, sql)
+
+    def p_data_type_length2(self, p):
+        """
+        data_type_length2 : LPAREN NUMBER COMMA NUMBER RPAREN
+        """
+        sql = '(%s, %s)' % (p[2], p[4])
+        p[0] = Node('data_type_length2', p, sql)
 
     def p_array_modifier(self, p):
         """
@@ -3028,12 +3153,16 @@ class SqlParser(object):
 
     def p_routine_declaration(self, p):
         """
-        routine_declaration : CREATE routine_head new_table_name rout_parameter_list opt_return rout_alt_type compound_statement
+        routine_declaration : CREATE routine_head new_table_name rout_parameter_list opt_return rout_alt_type AS compound_statement
+                            | CREATE routine_head new_table_name rout_parameter_list opt_return rout_alt_type compound_statement
                             | ATTACH routine_head attach_q_table_name rout_parameter_list opt_return rout_alt_type opt_as FROM literal
                             | CREATE routine_head new_table_name rout_parameter_list opt_return rout_alt_type LANGUAGE external_language_name EXTERNAL NAME_L STRING opt_type_option_list
         """
-        s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
-        sql = ' '.join(s_list)
+        if len(p) == 9:
+            sql = '%s %s %s %s %s %s\n%s\n%s' % (p[1], p[2].sql, p[3].sql, p[4].sql, p[5].sql, p[6].sql, p[7], p[8].sql)
+        else:
+            s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
+            sql = ' '.join(s_list)
         p[0] = Node('routine_declaration', p, sql)
 
     def p_module_body_part(self, p):
@@ -3055,7 +3184,7 @@ class SqlParser(object):
 
     def p_module_declaration(self, p):
         """
-        module_declaration : CREATE MODULE new_table_name BEGINX module_body END
+        module_declaration : CREATE MODULE new_table_name BEGIN module_body END
         """
         s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
         sql = ' '.join(s_list)
@@ -3077,7 +3206,7 @@ class SqlParser(object):
         if len(p) == 1:
             sql = ''
         else:
-            sql = '%s %s' % (p[1], p[2].sql)
+            sql = '\n%s %s' % (p[1], p[2].sql)
         p[0] = Node('opt_return', p, sql)
 
     def p_rout_parameter_list(self, p):
@@ -3085,8 +3214,10 @@ class SqlParser(object):
         rout_parameter_list : LPAREN RPAREN
                             | LPAREN parameter_commalist RPAREN
         """
-        s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
-        sql = ' '.join(s_list)
+        if len(p) == 3:
+            sql = '()'
+        else:
+            sql = '(%s)' % (p[2].sql)
         p[0] = Node('rout_parameter_list', p, sql)
 
     def p_parameter_commalist(self, p):
@@ -3102,7 +3233,16 @@ class SqlParser(object):
         """
         rout_parameter : parameter_mode column_ref data_type_ref rout_alt_type
                        | parameter_mode column_ref data_type_ref DEFAULT signed_literal rout_alt_type
-                       | parameter_mode column_ref data_type_ref EQUALS signed_literal rout_alt_type
+                       | parameter_mode column_ref data_type_ref EQ signed_literal rout_alt_type
+                       | parameter_mode parameter data_type_ref rout_alt_type
+                       | parameter_mode parameter data_type_ref DEFAULT signed_literal rout_alt_type
+                       | parameter_mode parameter data_type_ref EQ signed_literal rout_alt_type
+                       | column_ref data_type_ref rout_alt_type
+                       | column_ref data_type_ref DEFAULT signed_literal rout_alt_type
+                       | column_ref data_type_ref EQ signed_literal rout_alt_type
+                       | parameter data_type_ref rout_alt_type
+                       | parameter data_type_ref DEFAULT signed_literal rout_alt_type
+                       | parameter data_type_ref EQ signed_literal rout_alt_type
         """
         s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
         sql = ' '.join(s_list)
@@ -3145,23 +3285,6 @@ class SqlParser(object):
             sql = ' '.join(s_list)
         p[0] = Node('opt_soap_enc_mode', p, sql)
 
-    def p_soap_proc_opt_list(self, p):
-        """
-        soap_proc_opt_list : soap_proc_opt
-                           | soap_proc_opt_list COMMA soap_proc_opt
-        """
-        s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
-        sql = ' '.join(s_list)
-        p[0] = Node('soap_proc_opt_list', p, sql)
-
-    def p_soap_proc_opt(self, p):
-        """
-        soap_proc_opt : NAME EQUALS signed_literal
-        """
-        s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
-        sql = ' '.join(s_list)
-        p[0] = Node('soap_proc_opt', p, sql)
-
     def p_soap_kwd(self, p):
         """
         soap_kwd : __SOAP_TYPE
@@ -3177,8 +3300,7 @@ class SqlParser(object):
 
     def p_rout_alt_type(self, p):
         """
-        rout_alt_type : __SOAP_OPTIONS LPAREN soap_kwd EQUALS STRING opt_soap_enc_mode COMMA soap_proc_opt_list RPAREN
-                      | soap_kwd STRING opt_soap_enc_mode
+        rout_alt_type : soap_kwd STRING opt_soap_enc_mode
                       |
         """
         if len(p) == 1:
@@ -3212,10 +3334,9 @@ class SqlParser(object):
 
     def p_compound_statement(self, p):
         """
-        compound_statement : BEGINX statement_list END
+        compound_statement : BEGIN statement_list END
         """
-        s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
-        sql = ' '.join(s_list)
+        sql = '\n%s\n    %s\n%s' % (p[1], common.set_indent(p[2].sql, ' ' * 4), p[3])
         p[0] = Node('compound_statement', p, sql)
 
     def p_statement_list(self, p):
@@ -3224,7 +3345,7 @@ class SqlParser(object):
                        | statement_list statement_in_cs
         """
         s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
-        sql = ' '.join(s_list)
+        sql = '\n'.join(s_list)
         p[0] = Node('statement_list', p, sql)
 
     def p_statement_in_cs(self, p):
@@ -3233,8 +3354,10 @@ class SqlParser(object):
                         | compound_statement
                         | statement_in_cs_oper
         """
-        s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
-        sql = ' '.join(s_list)
+        if len(p) == 2:
+            sql = p[1].sql
+        else:
+            sql = '%s;' % (p[1].sql,)
         p[0] = Node('statement_in_cs', p, sql)
 
     def p_statement_in_cs_oper(self, p):
@@ -3243,7 +3366,7 @@ class SqlParser(object):
                              | control_statement
                              | identifier COLON statement_in_cs
                              | HTMLSTR
-                             | COMPARISON scalar_exp HTMLSTR
+                             | comparison scalar_exp HTMLSTR
                              | DIVIDE scalar_exp HTMLSTR
         """
         s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
@@ -3280,6 +3403,7 @@ class SqlParser(object):
     def p_variable_list(self, p):
         """
         variable_list : identifier
+                      | parameter
                       | variable_list COMMA identifier
         """
         s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
@@ -3298,65 +3422,26 @@ class SqlParser(object):
         sql = ' '.join(s_list)
         p[0] = Node('condition', p, sql)
 
-    def p_handler_statement(self, p):
-        """
-        handler_statement : compound_statement
-                          | routine_statement
-                          | call_statement
-                          | method_invocation
-                          | static_method_invocation
-                          | set_statement
-                          | RESIGNAL
-                          | RESIGNAL scalar_exp
-                          | return_statement
-                          | assignment_statement
-                          | if_statement
-                          | goto_statement
-                          | for_statement
-                          | while_statement
-        """
-        s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
-        sql = ' '.join(s_list)
-        p[0] = Node('handler_statement', p, sql)
-
     def p_handler_declaration(self, p):
         """
         handler_declaration : WHENEVER condition GOTO identifier
                             | WHENEVER condition GO TO identifier
                             | WHENEVER condition DEFAULT
-                            | DECLARE handler_type HANDLER FOR cond_value_list handler_statement
         """
         s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
         sql = ' '.join(s_list)
         p[0] = Node('handler_declaration', p, sql)
 
-    def p_handler_type(self, p):
-        """
-        handler_type : CONTINUE
-                     | EXIT
-        """
-        s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
-        sql = ' '.join(s_list)
-        p[0] = Node('handler_type', p, sql)
-
-    def p_cond_value_list(self, p):
-        """
-        cond_value_list : condition
-                        | cond_value_list COMMA condition
-        """
-        s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
-        sql = ' '.join(s_list)
-        p[0] = Node('cond_value_list', p, sql)
-
     def p_control_statement(self, p):
         """
         control_statement : call_statement SEMI
-                          | method_invocation SEMI
                           | static_method_invocation SEMI
                           | set_statement SEMI
+                          | set_statement
                           | RESIGNAL SEMI
                           | RESIGNAL scalar_exp SEMI
                           | return_statement SEMI
+                          | return_statement
                           | assignment_statement SEMI
                           | if_statement
                           | goto_statement SEMI
@@ -3369,28 +3454,21 @@ class SqlParser(object):
 
     def p_assignment_statement(self, p):
         """
-        assignment_statement : lvalue EQUALS scalar_exp
-                             | column_ref LBRACKET scalar_exp RBRACKET EQUALS scalar_exp
+        assignment_statement : column_ref EQ scalar_exp
+                             | parameter EQ scalar_exp
+                             | column_ref LBRACKET scalar_exp RBRACKET EQ scalar_exp
         """
         s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
         sql = ' '.join(s_list)
         p[0] = Node('assignment_statement', p, sql)
 
-    def p_lvalue(self, p):
-        """
-        lvalue : column_ref
-               | member_observer
-        """
-        s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
-        sql = ' '.join(s_list)
-        p[0] = Node('lvalue', p, sql)
-
     def p_if_statement(self, p):
         """
-        if_statement : IF LPAREN search_condition RPAREN statement opt_else
+        if_statement : IF search_condition statement opt_else
         """
-        s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
-        sql = ' '.join(s_list)
+        sql = '%s %s %s %s' % (p[1], p[2].sql, p[3].sql, p[4].sql)
+        if p.stack[-1] and p.stack[-1].type != 'ELSE':
+            sql = '\n' + sql
         p[0] = Node('if_statement', p, sql)
 
     def p_opt_else(self, p):
@@ -3401,7 +3479,7 @@ class SqlParser(object):
         if len(p) == 1:
             sql = ''
         else:
-            sql = '%s %s' % (p[1], p[2].sql)
+            sql = '\n%s %s' % (p[1], p[2].sql)
         p[0] = Node('opt_else', p, sql)
 
     def p_call_statement(self, p):
@@ -3415,11 +3493,11 @@ class SqlParser(object):
 
     def p_set_statement(self, p):
         """
-        set_statement : SET identifier COMPARISON scalar_exp
+        set_statement : SET parameter EQ scalar_exp
                       | SET identifier ON
                       | SET identifier OFF
         """
-        s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
+        s_list = [str(i.sql) if isinstance(i, Node) else i for i in p[1:]]
         sql = ' '.join(s_list)
         p[0] = Node('set_statement', p, sql)
 
@@ -3439,11 +3517,11 @@ class SqlParser(object):
         """
         s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
         sql = ' '.join(s_list)
-        p[0] = Node('return_statement', p, sql)
+        p[0] = Node('return_statement', p, '\n\n' + sql)
 
     def p_while_statement(self, p):
         """
-        while_statement : WHILE LPAREN search_condition RPAREN statement
+        while_statement : WHILE search_condition statement
         """
         s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
         sql = ' '.join(s_list)
@@ -3557,7 +3635,7 @@ class SqlParser(object):
         """
         event : INSERT
               | UPDATE opt_column_commalist
-              | DELETE_L
+              | DELETE
         """
         s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
         sql = ' '.join(s_list)
@@ -3673,20 +3751,9 @@ class SqlParser(object):
             sql = '%s (%s)' % (p[1], p[3].sql)
         p[0] = Node('opt_join', p, sql)
 
-    def p_opt_elt(self, p):
-        """
-        opt_elt : NAME
-                |
-        """
-        if len(p) == 1:
-            sql = ''
-        else:
-            sql = p[1]
-        p[0] = Node('opt_elt', p, sql)
-
     def p_xml_join_elt(self, p):
         """
-        xml_join_elt : q_table_name identifier opt_element opt_xml_col_list opt_join opt_pk opt_elt opt_xml_child
+        xml_join_elt : q_table_name identifier opt_element opt_xml_col_list opt_join opt_pk opt_xml_child
         """
         s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
         sql = ' '.join(s_list)
@@ -3694,7 +3761,7 @@ class SqlParser(object):
 
     def p_opt_xml_child(self, p):
         """
-        opt_xml_child : BEGINX xml_join_list END
+        opt_xml_child : BEGIN xml_join_list END
                       |
         """
         if len(p) == 1:
@@ -3706,7 +3773,7 @@ class SqlParser(object):
     def p_top_xml_child(self, p):
         """
         top_xml_child : query_spec
-                      | BEGINX xml_join_list END
+                      | BEGIN xml_join_list END
         """
         s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
         sql = ' '.join(s_list)
@@ -3772,45 +3839,9 @@ class SqlParser(object):
             sql = ' '.join(s_list)
         p[0] = Node('opt_publish', p, sql)
 
-    def p_xmlview_param_value(self, p):
-        """
-        xmlview_param_value : NAME
-                            | STRING
-        """
-        sql = p[1]
-        p[0] = Node('xmlview_param_value', p, sql)
-
-    def p_xmlview_param(self, p):
-        """
-        xmlview_param : NAME COMPARISON xmlview_param_value
-        """
-        s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
-        sql = ' '.join(s_list)
-        p[0] = Node('xmlview_param', p, sql)
-
-    def p_xmlview_params(self, p):
-        """
-        xmlview_params : xmlview_param
-                       | xmlview_params xmlview_param
-        """
-        s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
-        sql = ' '.join(s_list)
-        p[0] = Node('xmlview_params', p, sql)
-
-    def p_opt_xmlview_params(self, p):
-        """
-        opt_xmlview_params : LBRACKET xmlview_params RBRACKET
-                           |
-        """
-        if len(p) == 1:
-            sql = ''
-        else:
-            sql = '[%s]' % (p[2].sql,)
-        p[0] = Node('opt_xmlview_params', p, sql)
-
     def p_xml_view(self, p):
         """
-        xml_view : CREATE XML VIEW new_table_name AS opt_xmlview_params top_xml_child opt_elt opt_publish
+        xml_view : CREATE XML VIEW new_table_name AS top_xml_child opt_publish
         """
         s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
         sql = ' '.join(s_list)
@@ -3905,13 +3936,9 @@ class SqlParser(object):
         """
         if len(p) == 1:
             sql = ''
-        elif len(p) == 3:
-            sql = '%s %s' % (p[1], p[2].sql)
         else:
-            if isinstance(p[2], Node):
-                sql = '%s %s %s %s' % (p[1], p[2].sql, p[3], p[4], p[5])
-            else:
-                sql = '%s %s %s %s' % (p[1], p[2], p[3], p[4], p[5].sql)
+            s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
+            sql = ' '.join(s_list)
         p[0] = Node('opt_external_and_language_clause', p, sql)
 
     def p_opt_subtype_clause(self, p):
@@ -4147,27 +4174,12 @@ class SqlParser(object):
 
     def p_method_specification(self, p):
         """
-        method_specification : partial_method_specification opt_self_result opt_method_characteristics
+        method_specification : partial_method_specification opt_method_characteristics
                              | OVERRIDING partial_method_specification
         """
-        if len(p) == 3:
-            sql = '%s %s' % (p[1], p[2].sql)
-        else:
-            sql = '%s %s %s' % (p[1].sql, p[2].sql, p[3].sql)
+        s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
+        sql = ' '.join(s_list)
         p[0] = Node('method_specification', p, sql)
-
-    def p_opt_self_result(self, p):
-        """
-        opt_self_result : SELF_L AS RESULT
-                        | SELF_L AS LOCATOR
-                        | SELF_L AS RESULT SELF_L AS LOCATOR
-                        |
-        """
-        if len(p) == 1:
-            sql = ''
-        else:
-            sql = ' '.join(p[1:])
-        p[0] = Node('opt_self_result', p, sql)
 
     def p_opt_specific_method_name(self, p):
         """
@@ -4228,7 +4240,6 @@ class SqlParser(object):
     def p_external_language_name(self, p):
         """
         external_language_name : ADA
-                               | C
                                | COBOL
                                | FORTRAN
                                | MUMPS
@@ -4349,6 +4360,13 @@ class SqlParser(object):
             sql = '%s.%s' % (p[1].sql, p[3].sql)
         p[0] = Node('member_observer', p, sql)
 
+    def p_row_number(self, p):
+        """
+        row_number : ROW_NUMBER LPAREN RPAREN OVER LPAREN ORDER BY ordering_spec_commalist RPAREN
+        """
+        sql = '%s() %s(%s %s %s)' % (p[1], p[4], p[6], p[7], p[8].sql)
+        p[0] = Node('row_number', p, sql)
+
     def p_member_observer_no_id_chain(self, p):
         """
         member_observer_no_id_chain : scalar_exp_no_col_ref_no_mem_obs_chain PERIOD method_identifier
@@ -4407,14 +4425,14 @@ class SqlParser(object):
 
     def p_opt_with_permission_set(self, p):
         """
-        opt_with_permission_set : WITH PERMISSION_SET COMPARISON SAFE_L
-                                | WITH PERMISSION_SET COMPARISON UNRESTRICTED
+        opt_with_permission_set : WITH PERMISSION_SET comparison SAFE_L
+                                | WITH PERMISSION_SET comparison UNRESTRICTED
                                 |
         """
         if len(p) == 1:
             sql = ''
         else:
-            sql = ' '.join(p[1:])
+            sql = '%s %s %s %s' % (p[1], p[2], p[3].sql, p[4])
         p[0] = Node('opt_with_permission_set', p, sql)
 
     def p_opt_with_autoregister(self, p):
@@ -4456,9 +4474,29 @@ class SqlParser(object):
         sql = '%s %s %s' % (p[1], p[2], p[3].sql)
         p[0] = Node('drop_assembly', p, sql)
 
+    def p_comparison(self, p):
+        """
+        comparison : GE
+                   | LE
+                   | NE
+                   | GT
+                   | LT
+                   | EQ
+        """
+        sql = p[1]
+        p[0] = Node('comparison', p, sql)
+
+    def find_column(self, input, lexpos):
+        last_cr = input.rfind('\n', 0, lexpos)
+        if last_cr < 0:
+            last_cr = 0
+        column = lexpos - last_cr
+        return column
+
     def p_error(self, p):
         if p:
-            message = u"Error: '%s' 付近に不適切な構文があります。%d 行, %d 列!" % (p.value, p.lineno, p.lexpos)
+            column = self.find_column(p.lexer.lexdata, p.lexpos)
+            message = u"Error: '%s' 付近に不適切な構文があります。%d 行, %d 文字!" % (p.value, p.lineno, column)
         else:
             message = u"不適切な構文があります。"
         self.errors.append(message)
@@ -4467,35 +4505,39 @@ class SqlParser(object):
         self.parser = yacc.yacc(module=self, **kwargs)
         return self.parser
 
-    def test(self, p):
-        import os
-        lexer = SqlLexer().build()
-        path = os.path.dirname(os.path.abspath(__file__))
-        for root, dirs, files in os.walk(os.path.join(path, 'test')):
-            for f in files:
-                if f[-4:] == '.sql':
-                    text = open(os.path.join(root, f), 'r').read()
+    def test(self, p, mode):
+        if mode == "1":
+            import os
+            path = os.path.dirname(os.path.abspath(__file__))
+            for root, dirs, files in os.walk(os.path.join(path, 'test')):
+                for f in files:
+                    if f[-4:] == '.sql':
+                        text = open(os.path.join(root, f), 'r').read()
+                        lexer = SqlLexer().build()
+                        result = self.parser.parse(text, lexer=lexer)
+                        if result:
+                            print "----------------------------------------------------------------"
+                            print result.to_sql()
+                        else:
+                            print '============  ERROR  ============='
+                            print 'file: ' + os.path.join(root, f)
+                            print text
+                            print '\n'.join(p.errors)
+                            return
+        else:
+            while True:
+                text = raw_input("sql> ").strip()
+                if text.lower() in ("quit", "exit"):
+                    break
+                if text:
+                    del p.errors[:]
+                    lexer = SqlLexer().build()
                     result = self.parser.parse(text, lexer=lexer)
                     if result:
-                        print "----------------------------------------------------------------"
                         print result.to_sql()
                     else:
-                        print '============  ERROR  ============='
-                        print 'file: ' + os.path.join(root, f)
-                        print text
+                        print 'Parsing Error!'
                         print '\n'.join(p.errors)
-                        return
-        #while True:
-        #    text = raw_input("sql> ").strip()
-        #    if text.lower() == "quit":
-        #        break
-        #    if text:
-        #        result = self.parser.parse(text, lexer=lexer)
-        #        if result:
-        #            print result.to_sql()
-        #        else:
-        #            print 'Parsing Error!'
-        #            print '\n'.join(p.errors)
 
 
 def unittest_lexer():
@@ -4504,11 +4546,13 @@ def unittest_lexer():
     l.test()
 
 
-def unittest_parser():
+def unittest_parser(mode):
     p = SqlParser()
     p.build()
-    p.test(p)
+    p.test(p, mode)
 
 if __name__ == "__main__":
-    #unittest_lexer()
-    unittest_parser()
+    import sys
+    mode = sys.argv[1] if len(sys.argv) == 2 else None 
+    #unittest_lexer(mode)
+    unittest_parser(mode)
