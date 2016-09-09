@@ -62,7 +62,7 @@ class MainWindow(QtGui.QMainWindow):
             self.connect(action, QtCore.SIGNAL('triggered()'), signal_mapper, QtCore.SLOT('map()'))
             signal_mapper.setMapping(action, str(codec))
             codec_menu_all.addAction(action)
-        self.connect(signal_mapper, QtCore.SIGNAL('mapped(QString)'), self.menuItemClicked)
+        self.connect(signal_mapper, QtCore.SIGNAL('mapped(QString)'), self.menu_item_clicked)
         file_menu.addSeparator()
         file_menu.addAction(u"閉じる(&C)", self.close_file, "Ctrl+F4")
         file_menu.addSeparator()
@@ -76,8 +76,16 @@ class MainWindow(QtGui.QMainWindow):
         edit_menu.addSeparator()
         edit_menu.addAction(u"左(先頭)の空白を削除", self.delete_left_space, "ALT+L")
         edit_menu.addAction(u"右(末尾)の空白を削除", self.delete_right_space, "ALT+R")
+        
+        # 検索メニュー
+        find_menu = QtGui.QMenu(u"検索(&S)", self)
+        self.menuBar().addMenu(find_menu)
 
-    def menuItemClicked(self, name):
+        find_menu.addAction(u"検索", self.show_find_dialog, "Ctrl+F")
+        find_menu.addAction(u"次を検索", self.find_next, "F3")
+        find_menu.addAction(u"前を検索", self.find_prev, "Shift+F3")
+
+    def menu_item_clicked(self, name):
         if name and self.get_current_editor().path:
             self.open_file(self.get_current_editor().path, name)
 
@@ -105,6 +113,18 @@ class MainWindow(QtGui.QMainWindow):
                 self.set_status_message(errors[0])
             else:
                 self.set_status_message('Success!', 3000)
+
+    def show_find_dialog(self):
+        if self.get_current_editor():
+            self.get_current_editor().show_find_dialog()
+
+    def find_next(self):
+        if self.get_current_editor():
+            self.get_current_editor().find_text(False)
+
+    def find_prev(self):
+        if self.get_current_editor():
+            self.get_current_editor().find_text(True)
 
     def get_current_editor(self):
         if self.editors:
@@ -225,7 +245,7 @@ class Editors(QtGui.QTabWidget):
 
     def open_file(self, path=None, codec=None):
         if not path:
-            path = QtGui.QFileDialog.getOpenFileName(self, u"開く", '', "Sql Files (*.sql);;All Files(*.*)")
+            path = QtGui.QFileDialog.getOpenFileName(self.parent(), u"開く", '', "Sql Files (*.sql);;All Files(*.*)")
 
         if path:
             codec = codec if codec else constants.DEFAULT_CODEC_NAME
@@ -281,15 +301,174 @@ class Editors(QtGui.QTabWidget):
         self.setCurrentIndex(new_position)
 
 
+class FindText:
+    def __init__(self):
+        self.text = ''
+        self.is_whole_word = False
+        self.is_case_sensitive = False
+        self.is_regular = False
+        self.is_show_message = False
+        self.is_auto_close = False
+        self.is_research = False
+
+    def get_find_reg(self):
+        if self.text:
+            if self.is_whole_word:
+                reg = QtCore.QRegExp(r'\b' + self.text + r'\b')
+            else:
+                reg = QtCore.QRegExp(self.text)
+            if self.is_case_sensitive:
+                reg.setCaseSensitivity(QtCore.Qt.CaseSensitive)
+            else:
+                reg.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
+
+            return reg
+        else:
+            return None
+
+
+class FindDialog(QtGui.QDialog):
+    def __init__(self, parent, finding_text):
+        super(FindDialog, self).__init__(parent)
+        self.finding_text = finding_text
+        self.txt_condition = None
+
+        css = '''
+        FindDialog {
+            line-height: 1;
+        }
+        QCheckBox {
+            margin: 0;
+            padding: 0;
+        }
+        '''
+        self.setStyleSheet(css)
+
+        self.init_layout()
+        self.setFixedSize(470, 160)
+        self.setWindowTitle(u"検索")
+
+    def init_layout(self):
+        hbox = QtGui.QHBoxLayout()
+        left_vbox = QtGui.QVBoxLayout()
+        left_vbox.setContentsMargins(-1, -1, -1, 0)
+        right_vbox = QtGui.QVBoxLayout()
+
+        # 検索文字列
+        sub_hbox = QtGui.QHBoxLayout()
+        label = QtGui.QLabel(u"条件(&N)")
+        self.txt_condition = QtGui.QLineEdit()
+        if self.finding_text and self.finding_text.text:
+            self.txt_condition.setText(self.finding_text.text)
+        label.setBuddy(self.txt_condition)
+        sub_hbox.addWidget(label)
+        sub_hbox.addWidget(self.txt_condition)
+        left_vbox.addLayout(sub_hbox)
+        # 単語単位
+        chk = QtGui.QCheckBox(u"単語単位で探す(&W)")
+        if self.finding_text and self.finding_text.is_whole_word:
+            chk.setCheckState(QtCore.Qt.Checked)
+        chk.stateChanged.connect(self.set_whole_word)
+        left_vbox.addWidget(chk)
+        # 大文字と小文字を区別する
+        chk = QtGui.QCheckBox(u"大文字と小文字を区別する(&C)")
+        if self.finding_text and self.finding_text.is_case_sensitive:
+            chk.setCheckState(QtCore.Qt.Checked)
+        chk.stateChanged.connect(self.set_case_sensitive)
+        left_vbox.addWidget(chk)
+        # 正規表現
+        chk = QtGui.QCheckBox(u"正規表現で探す(&E)")
+        if self.finding_text and self.finding_text.is_regular:
+            chk.setCheckState(QtCore.Qt.Checked)
+        chk.stateChanged.connect(self.set_regular)
+        left_vbox.addWidget(chk)
+        # 見つからないときにメッセージ表示
+        chk = QtGui.QCheckBox(u"見つからないときにメッセージ表示(&M)")
+        if self.finding_text and self.finding_text.is_show_message:
+            chk.setCheckState(QtCore.Qt.Checked)
+        chk.stateChanged.connect(self.set_show_message)
+        left_vbox.addWidget(chk)
+        # 検索ダイアログを自動的に閉じる
+        chk = QtGui.QCheckBox(u"検索ダイアログを自動的に閉じる(&L)")
+        if self.finding_text and self.finding_text.is_auto_close:
+            chk.setCheckState(QtCore.Qt.Checked)
+        chk.stateChanged.connect(self.set_auto_close)
+        left_vbox.addWidget(chk)
+        # 先頭（末尾）から再検索する
+        chk = QtGui.QCheckBox(u"先頭（末尾）から再検索する(&Z)")
+        if self.finding_text and self.finding_text.is_research:
+            chk.setCheckState(QtCore.Qt.Checked)
+        chk.stateChanged.connect(self.set_research)
+        left_vbox.addWidget(chk)
+
+        # 上検索
+        btn = QtGui.QPushButton(u"上検索(&U)")
+        btn.clicked.connect(self.find_prev)
+        right_vbox.addWidget(btn)
+        # 下検索
+        btn = QtGui.QPushButton(u"下検索(&D)")
+        btn.clicked.connect(self.find_next)
+        right_vbox.addWidget(btn)
+        # キャンセル
+        btn = QtGui.QPushButton(u"キャンセル(&X)")
+        btn.clicked.connect(self.reject)
+        right_vbox.addWidget(btn)
+        right_vbox.addStretch()
+
+        hbox.addLayout(left_vbox)
+        hbox.addLayout(right_vbox)
+        self.setLayout(hbox)
+
+    def get_editor(self):
+        return self.parentWidget()
+
+    def set_whole_word(self, state):
+        self.finding_text.is_whole_word = (state == QtCore.Qt.Checked)
+
+    def set_case_sensitive(self, state):
+        self.finding_text.is_case_sensitive = (state == QtCore.Qt.Checked)
+
+    def set_regular(self, state):
+        self.finding_text.is_regular = (state == QtCore.Qt.Checked)
+
+    def set_show_message(self, state):
+        self.finding_text.is_show_message = (state == QtCore.Qt.Checked)
+
+    def set_auto_close(self, state):
+        self.finding_text.is_auto_close = (state == QtCore.Qt.Checked)
+
+    def set_research(self, state):
+        self.finding_text.is_research = (state == QtCore.Qt.Checked)
+
+    def find_next(self):
+        self.finding_text.text = self.txt_condition.text()
+        self.get_editor().finding_text = self.finding_text
+        self.get_editor().find_text(False)
+        if self.finding_text.is_auto_close:
+            self.reject()
+
+    def find_prev(self):
+        self.finding_text.text = self.txt_condition.text()
+        self.get_editor().finding_text = self.finding_text
+        self.get_editor().find_text(True)
+        if self.finding_text.is_auto_close:
+            self.reject()
+
+
 class CodeEditor(QtGui.QPlainTextEdit):
 
     CODEC_LIST = ['SJIS', 'UTF-8', 'UTF-16', 'UTF-32']
+    LEFT_BRACKETS = ('(', '[', '{')
+    RIGHT_BRACKETS = (')', ']', '}')
+    BRACKETS = {'(': ')', '[': ']', '{': '}',
+                ')': '(', ']': '[', '}': '{'}
 
     def __init__(self, parent=None, path=None, codec=None):
         super(CodeEditor, self).__init__(parent)
         self.path = path
         self.codec = codec
         self.bom = False
+        self.finding_text = FindText()
 
         font = QtGui.QFont()
         font.setFamily(u'ＭＳ ゴシック')
@@ -310,7 +489,7 @@ class CodeEditor(QtGui.QPlainTextEdit):
         self.connect(self, QtCore.SIGNAL('updateRequest(QRect,int)'), self.update_line_number_area)
         self.connect(self, QtCore.SIGNAL('cursorPositionChanged()'), self.cursor_position_changed)
 
-        self.update_line_number_area_width(0)
+        self.update_line_number_area_width()
         self.highlight_current_line()
 
         css = '''
@@ -319,7 +498,7 @@ class CodeEditor(QtGui.QPlainTextEdit):
             border: none;
         }
         '''
-        self.setStyleSheet(css);
+        self.setStyleSheet(css)
 
     def delete_left_space(self):
         self.delete_block_space(False)
@@ -384,6 +563,37 @@ class CodeEditor(QtGui.QPlainTextEdit):
             return start_block, end_block
         else:
             return None, None
+
+    def get_next_pair_cursor(self, text, current_cursor):
+
+        def find_next(r, c, t, is_back=False):
+            times = 1
+            if is_back:
+                args = [r, c, QtGui.QTextDocument.FindBackward]
+            else:
+                args = [r, c]
+            cur = self.document().find(*args)
+            while cur.position() >= 0 and times > 0:
+                if cur.selectedText() != t:
+                    times += 1
+                else:
+                    times -= 1
+                if times == 0:
+                    return cur
+                else:
+                    args[1] = cur
+                    cur = self.document().find(*args)
+
+        if text in CodeEditor.BRACKETS.values():
+            pair = CodeEditor.BRACKETS[str(text)]
+            reg = QtCore.QRegExp('\\' + text + '|\\' + pair)
+            if text in CodeEditor.RIGHT_BRACKETS:
+                cursor = find_next(reg, current_cursor, pair, True)
+            else:
+                cursor = find_next(reg, current_cursor, pair, False)
+            return cursor
+        else:
+            return None
 
     def cursor_position_changed(self):
         """
@@ -451,6 +661,7 @@ class CodeEditor(QtGui.QPlainTextEdit):
     def highlight_current_line(self):
         extra_selections = QtGui.QTextEdit.extraSelections(QtGui.QTextEdit())
 
+        # 行を highlight
         if not self.isReadOnly():
             selection = QtGui.QTextEdit.ExtraSelection()
 
@@ -462,9 +673,30 @@ class CodeEditor(QtGui.QPlainTextEdit):
             selection.cursor.clearSelection()
             extra_selections.append(selection)
 
+        # 括弧を highlight
+        cursor = self.textCursor()
+        cursor.movePosition(QtGui.QTextCursor.Right, QtGui.QTextCursor.KeepAnchor)
+        text = cursor.selectedText()
+        if unicode(text) not in CodeEditor.BRACKETS.values():
+            cursor.movePosition(QtGui.QTextCursor.Left, QtGui.QTextCursor.MoveAnchor)
+            cursor.movePosition(QtGui.QTextCursor.Left, QtGui.QTextCursor.KeepAnchor)
+            text = cursor.selectedText()
+        if unicode(text) in CodeEditor.BRACKETS.values():
+            word_color = QtGui.QColor(QtCore.Qt.red).lighter(160)
+            current_word = QtGui.QTextEdit.ExtraSelection()
+            current_word.format.setBackground(word_color)
+            current_word.cursor = cursor
+            paired_cursor = self.get_next_pair_cursor(text, cursor)
+            if paired_cursor:
+                paired_word = QtGui.QTextEdit.ExtraSelection()
+                paired_word.format.setBackground(word_color)
+                paired_word.cursor = paired_cursor
+                extra_selections.append(current_word)
+                extra_selections.append(paired_word)
+
         self.setExtraSelections(extra_selections)
 
-    def update_line_number_area_width(self, i):
+    def update_line_number_area_width(self):
         self.setViewportMargins(self.line_number_area_width(), 0, 0, 0)
 
     def update_line_number_area(self, rect, dy):
@@ -474,7 +706,7 @@ class CodeEditor(QtGui.QPlainTextEdit):
             self.line_number_area.update(0, rect.y(), self.line_number_area.width(), rect.height())
 
         if rect.contains(self.viewport().rect()):
-            self.update_line_number_area_width(0)
+            self.update_line_number_area_width()
 
     def draw_column_line(self, col, color):
         left = round(self.get_char_width() * col)
@@ -555,6 +787,25 @@ class CodeEditor(QtGui.QPlainTextEdit):
             top = bottom
             bottom = top + self.blockBoundingRect(block).height()
             block = block.next()
+
+    def show_find_dialog(self):
+        find_dialog = FindDialog(self, self.finding_text)
+        find_dialog.show()
+
+    def find_text(self, is_back=False):
+        cursor = self.textCursor()
+        if not self.finding_text:
+            return
+        reg = self.finding_text.get_find_reg()
+        if not reg:
+            return
+
+        args = [reg, cursor]
+        if is_back:
+            args.append(QtGui.QTextDocument.FindBackward)
+        cursor = self.document().find(*args)
+        if cursor.position() >= 0:
+            self.setTextCursor(cursor)
 
     def set_line_number(self):
         """
@@ -687,16 +938,14 @@ class LineNumberArea(QtGui.QWidget):
     def mousePressEvent(self, event):
         btn = event.button()
         if btn == QtCore.Qt.LeftButton:
-            y = event.y()
-            line_no = (y / self.editor.get_line_height())
+            line_no = self.editor.cursorForPosition(event.pos()).blockNumber()
             self.editor.select_lines(line_no)
             self.is_dragged = True
             self.select_start_line = line_no
 
     def mouseMoveEvent(self, event):
         if self.is_dragged:
-            y = event.y()
-            line_no = (y / self.editor.get_line_height())
+            line_no = self.editor.cursorForPosition(event.pos()).blockNumber()
             self.editor.select_lines(self.select_start_line, line_no)
 
     def mouseReleaseEvent(self, event):

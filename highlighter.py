@@ -10,7 +10,7 @@ class Highlighter(QtGui.QSyntaxHighlighter):
         super(Highlighter, self).__init__(parent)
 
         self.doc_type = doc_type
-        self.highlighting_rules = None
+        self.highlighting_rules = []
         self.multi_line_comment_format = None
         self.comment_start_expression = None
         self.comment_end_expression = None
@@ -20,8 +20,7 @@ class Highlighter(QtGui.QSyntaxHighlighter):
         keyword_format.setForeground(QtCore.Qt.blue)
         # keyword_format.setFontWeight(QtGui.QFont.Bold)
 
-        self.highlighting_rules = [(QtCore.QRegExp(pattern, QtCore.Qt.CaseInsensitive), keyword_format)
-                                   for pattern in keyword_patterns]
+        self.highlighting_rules = self.highlighting_rules + [(QtCore.QRegExp(pattern, QtCore.Qt.CaseInsensitive), keyword_format) for pattern in keyword_patterns]
 
         quotation_format = QtGui.QTextCharFormat()
         quotation_format.setForeground(QtCore.Qt.red)
@@ -69,5 +68,17 @@ class SqlHighlighter(Highlighter):
         Highlighter.__init__(self, parent, 'sql')
         
         keyword_patterns = [r'\b' + keyword + r'\b' for keyword in SqlLexer.reserved.values()]
+
+        global_patterns = [r'@@' + _global + r'\b' for _global in SqlLexer.globals]
+        for pattern in global_patterns:
+           format = QtGui.QTextCharFormat()
+           format.setForeground(QtGui.QColor('#FF00FF'))
+           self.highlighting_rules.append((QtCore.QRegExp(pattern), format))
+
+        meta_data_patterns = [r'\b' + meta_data + r'\b' for meta_data in SqlLexer.meta_datas]
+        for pattern in meta_data_patterns:
+           format = QtGui.QTextCharFormat()
+           format.setForeground(QtGui.QColor('#FF00FF'))
+           self.highlighting_rules.append((QtCore.QRegExp(pattern), format))
 
         self.init_rules(keyword_patterns)
