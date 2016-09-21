@@ -409,6 +409,7 @@ class SqlLexer(object):
               'COMPOUND',
               'DIVIDE',
               'EQ',
+              'FLOAT_NUM',
               'GE',
               'GLOBAL',
               'GT',
@@ -467,6 +468,10 @@ class SqlLexer(object):
         if t.value[2:] not in SqlLexer.globals:
             return None
         t.type = 'GLOBAL_' + t.value[2:].upper()
+        return t
+
+    def t_FLOAT_NUM(self, t):
+        r'\d+\.\d+'
         return t
 
     def t_NUMBER(self, t):
@@ -2954,6 +2959,7 @@ class SqlParser(object):
         literal : STRING
                 | WSTRING
                 | NUMBER
+                | FLOAT_NUM
                 | APPROXNUM
                 | BINARYNUM
                 | NULLX

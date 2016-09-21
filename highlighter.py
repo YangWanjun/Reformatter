@@ -14,6 +14,8 @@ class Highlighter(QtGui.QSyntaxHighlighter):
         self.multi_line_comment_format = None
         self.comment_start_expression = None
         self.comment_end_expression = None
+        self.text_highlight_format = None
+        self.text_highlight_list = []
 
     def init_rules(self, keyword_patterns):
         keyword_format = QtGui.QTextCharFormat()
@@ -35,6 +37,9 @@ class Highlighter(QtGui.QSyntaxHighlighter):
 
         self.comment_start_expression = QtCore.QRegExp("/\\*")
         self.comment_end_expression = QtCore.QRegExp("\\*/")
+
+        self.text_highlight_format = QtGui.QTextCharFormat()
+        self.text_highlight_format.setBackground(QtGui.QBrush(QtCore.Qt.yellow))
 
     def highlightBlock(self, text):
         for pattern, formatter in self.highlighting_rules:
@@ -61,6 +66,17 @@ class Highlighter(QtGui.QSyntaxHighlighter):
 
             self.setFormat(start_index, comment_length, self.multi_line_comment_format)
             start_index = self.comment_start_expression.indexIn(text, start_index + comment_length)
+
+        for pattern in self.text_highlight_list:
+            if isinstance(pattern, QtCore.QRegExp):
+                expression = pattern
+            else:
+                expression = QtCore.QRegExp(pattern)
+            index = expression.indexIn(text)
+            while index >= 0:
+                length = expression.matchedLength()
+                self.setFormat(index, length, self.text_highlight_format)
+                index = expression.indexIn(text, index + length)
 
 
 class SqlHighlighter(Highlighter):
