@@ -10,9 +10,10 @@ from sqlparser import SqlLexer, SqlParser
 
 
 class Editors(QtGui.QTabWidget):
-    def __init__(self, parent):
+    def __init__(self, parent, options):
         super(Editors, self).__init__(parent)
         self.setContentsMargins(0,0,0,0)
+        self.options = options
 
         self.untitled_name_index = 0
         self.setTabBar(EditorTabBar())
@@ -31,7 +32,7 @@ class Editors(QtGui.QTabWidget):
         else:
             filename = self.get_untitled_name()
 
-        editor = SqlEditor(self, path)
+        editor = SqlEditor(self, path, options=self.options)
         self.addTab(editor, filename)
         self.setCurrentWidget(editor)
         if path:
@@ -146,7 +147,7 @@ class EditorTabBar(QtGui.QTabBar):
 
 
 class SqlEditor(QtGui.QWidget):
-    def __init__(self, parent=None, path=None, codec=None):
+    def __init__(self, parent=None, path=None, codec=None, options=None):
         super(SqlEditor, self).__init__(parent)
         self.splitter = None
         self.code_editor = None
@@ -156,6 +157,7 @@ class SqlEditor(QtGui.QWidget):
         self.status_bar = None
         self.setContentsMargins(0,0,0,0)
         self.init_layout(path, codec)
+        self.options = options
 
         css = '''
         QTableView {
@@ -175,7 +177,7 @@ class SqlEditor(QtGui.QWidget):
         layout.setMargin(0)
         # エディター
         self.splitter = QtGui.QSplitter(QtCore.Qt.Vertical, self)
-        self.code_editor = CodeEditor(self.splitter, path, codec)
+        self.code_editor = CodeEditor(self.splitter, path, codec, options=self.options)
         self.splitter.addWidget(self.code_editor)
         layout.addWidget(self.splitter)
         # ステータスバー
@@ -265,13 +267,14 @@ class CodeEditor(QtGui.QPlainTextEdit):
     BRACKETS = {'(': ')', '[': ']', '{': '}',
                 ')': '(', ']': '[', '}': '{'}
 
-    def __init__(self, parent=None, path=None, codec=None):
+    def __init__(self, parent=None, path=None, codec=None, options=None):
         super(CodeEditor, self).__init__(parent)
         self.path = path
         self.codec = codec
         self.bom = False
         self.finding = Finding(self)
         self.option = EditorOption()
+        self.options = options
         self.bookmarks = []
 
         font = QtGui.QFont()
@@ -1010,11 +1013,13 @@ class FindDialog(QtGui.QDialog):
         self.setStyleSheet(css)
 
         self.init_layout()
-        self.setFixedSize(480, 160)
+        self.setFixedSize(480, 150)
         self.setWindowTitle(u"検索")
 
     def init_layout(self):
         hbox = QtGui.QHBoxLayout()
+        hbox.setSpacing(5)
+        hbox.setMargin(10)
         left_vbox = QtGui.QVBoxLayout()
         left_vbox.setContentsMargins(-1, -1, -1, 0)
         right_vbox = QtGui.QVBoxLayout()
@@ -1184,12 +1189,23 @@ class SqlDatabaseDialog(QtGui.QDialog):
 
         self.setModal(True)
         self.init_layout()
-        self.setFixedSize(300, 160)
+        self.setFixedSize(320, 160)
         self.setWindowTitle(SqlDatabaseDialog.TITLE)
+
+        css = '''
+        QFormLayout {
+            width: 160px;
+            border: 1px solid red;
+        }
+        '''
+        self.setStyleSheet(css)
 
     def init_layout(self):
         layout = QtGui.QVBoxLayout()
+        layout.setSpacing(5)
+        layout.setMargin(10)
         form = QtGui.QFormLayout()
+        form.setMargin(0)
         self.txt_server_name = QtGui.QLineEdit("mfv9mapdb03")
         form.addRow(u"サーバー名：", self.txt_server_name)
 

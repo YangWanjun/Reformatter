@@ -1,7 +1,7 @@
-#coding: UTF-8
-#!/usr/bin/env python
+# coding: UTF-8
+# !/usr/bin/env python
 
-import os, re
+import os
 import common, constants
 
 from PyQt4 import QtCore, QtGui
@@ -14,7 +14,7 @@ class MainWindow(QtGui.QMainWindow):
         super(MainWindow, self).__init__(parent)
         # エディターのTagWidget
         self.editors = None
-        self.setting = Setting()
+        self.options = Setting()
 
         self.init_layout()
         self.new_file()
@@ -32,7 +32,7 @@ class MainWindow(QtGui.QMainWindow):
 
     def init_layout(self):
         # エディター
-        self.editors = Editors(self)
+        self.editors = Editors(self, self.options)
 
         self.init_menu()
         self.init_db_toolbar()
@@ -100,7 +100,7 @@ class MainWindow(QtGui.QMainWindow):
             toolbar.clear()
 
         # データベースに接続する
-        path = os.path.join(common.get_root_path(), r"icons\database_add.png")
+        path = os.path.join(common.get_root_path(), r"icons/database_add.png")
         action = toolbar.addAction(QtGui.QIcon(path), u"データベースに接続する。")
         self.connect(action, QtCore.SIGNAL('triggered()'), self.connect_database)
         # 接続されているデータベース
@@ -116,7 +116,7 @@ class MainWindow(QtGui.QMainWindow):
             combo_box.view().setSizePolicy(sp)
             toolbar.addWidget(combo_box)
         # SQLを実行する。
-        path = os.path.join(common.get_root_path(), r"icons\right_arrow.png")
+        path = os.path.join(common.get_root_path(), r"icons/right_arrow.png")
         action = toolbar.addAction(QtGui.QIcon(path), u"ＳＱＬを実行する。")
         action.setShortcut(QtCore.Qt.Key_F5)
         self.connect(action, QtCore.SIGNAL('triggered()'), self.execute_sql)
