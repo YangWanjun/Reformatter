@@ -92,3 +92,4 @@ ENV/
 *.out
 parsetab.py
 *.DS_Store
+setting.db

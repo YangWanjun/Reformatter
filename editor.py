@@ -149,6 +149,7 @@ class EditorTabBar(QtGui.QTabBar):
 class SqlEditor(QtGui.QWidget):
     def __init__(self, parent=None, path=None, codec=None, options=None):
         super(SqlEditor, self).__init__(parent)
+        self.options = options
         self.splitter = None
         self.code_editor = None
         self.table_view = SqlTableResult()
@@ -157,7 +158,6 @@ class SqlEditor(QtGui.QWidget):
         self.status_bar = None
         self.setContentsMargins(0,0,0,0)
         self.init_layout(path, codec)
-        self.options = options
 
         css = '''
         QTableView {
@@ -272,7 +272,7 @@ class CodeEditor(QtGui.QPlainTextEdit):
         self.path = path
         self.codec = codec
         self.bom = False
-        self.finding = Finding(self)
+        self.finding = Finding(self, options.finding_option)
         self.option = EditorOption()
         self.options = options
         self.bookmarks = []
@@ -1038,37 +1038,37 @@ class FindDialog(QtGui.QDialog):
         left_vbox.addStretch()
         # 単語単位
         chk = QtGui.QCheckBox(u"単語単位で探す(&W)")
-        if self.finding and self.finding.is_whole_word:
+        if self.finding and self.finding.option.is_whole_word:
             chk.setCheckState(QtCore.Qt.Checked)
         chk.stateChanged.connect(self.set_whole_word)
         left_vbox.addWidget(chk)
         # 大文字と小文字を区別する
         chk = QtGui.QCheckBox(u"大文字と小文字を区別する(&C)")
-        if self.finding and self.finding.is_case_sensitive:
+        if self.finding and self.finding.option.is_case_sensitive:
             chk.setCheckState(QtCore.Qt.Checked)
         chk.stateChanged.connect(self.set_case_sensitive)
         left_vbox.addWidget(chk)
         # 正規表現
         chk = QtGui.QCheckBox(u"正規表現で探す(&E)")
-        if self.finding and self.finding.is_regular:
+        if self.finding and self.finding.option.is_regular:
             chk.setCheckState(QtCore.Qt.Checked)
         chk.stateChanged.connect(self.set_regular)
         left_vbox.addWidget(chk)
         # 見つからないときにメッセージ表示
         chk = QtGui.QCheckBox(u"見つからないときにメッセージ表示(&M)")
-        if self.finding and self.finding.is_show_message:
+        if self.finding and self.finding.option.is_show_message:
             chk.setCheckState(QtCore.Qt.Checked)
         chk.stateChanged.connect(self.set_show_message)
         left_vbox.addWidget(chk)
         # 検索ダイアログを自動的に閉じる
         chk = QtGui.QCheckBox(u"検索ダイアログを自動的に閉じる(&L)")
-        if self.finding and self.finding.is_auto_close:
+        if self.finding and self.finding.option.is_auto_close:
             chk.setCheckState(QtCore.Qt.Checked)
         chk.stateChanged.connect(self.set_auto_close)
         left_vbox.addWidget(chk)
         # 先頭（末尾）から再検索する
         chk = QtGui.QCheckBox(u"先頭（末尾）から再検索する(&Z)")
-        if self.finding and self.finding.is_research:
+        if self.finding and self.finding.option.is_research:
             chk.setCheckState(QtCore.Qt.Checked)
         chk.stateChanged.connect(self.set_research)
         left_vbox.addWidget(chk)
@@ -1096,35 +1096,35 @@ class FindDialog(QtGui.QDialog):
         return self.parentWidget()
 
     def set_whole_word(self, state):
-        self.finding.is_whole_word = (state == QtCore.Qt.Checked)
+        self.finding.option.is_whole_word = (state == QtCore.Qt.Checked)
 
     def set_case_sensitive(self, state):
-        self.finding.is_case_sensitive = (state == QtCore.Qt.Checked)
+        self.finding.option.is_case_sensitive = (state == QtCore.Qt.Checked)
 
     def set_regular(self, state):
-        self.finding.is_regular = (state == QtCore.Qt.Checked)
+        self.finding.option.is_regular = (state == QtCore.Qt.Checked)
 
     def set_show_message(self, state):
-        self.finding.is_show_message = (state == QtCore.Qt.Checked)
+        self.finding.option.is_show_message = (state == QtCore.Qt.Checked)
 
     def set_auto_close(self, state):
-        self.finding.is_auto_close = (state == QtCore.Qt.Checked)
+        self.finding.option.is_auto_close = (state == QtCore.Qt.Checked)
 
     def set_research(self, state):
-        self.finding.is_research = (state == QtCore.Qt.Checked)
+        self.finding.option.is_research = (state == QtCore.Qt.Checked)
 
     def find_next(self):
         self.finding.text = self.txt_condition.text()
         self.get_editor().finding = self.finding
         self.get_editor().find_text(False)
-        if self.finding.is_auto_close:
+        if self.finding.option.is_auto_close:
             self.reject()
 
     def find_prev(self):
         self.finding.text = self.txt_condition.text()
         self.get_editor().finding = self.finding
         self.get_editor().find_text(True)
-        if self.finding.is_auto_close:
+        if self.finding.option.is_auto_close:
             self.reject()
 
 
@@ -1256,23 +1256,18 @@ class SqlDatabaseDialog(QtGui.QDialog):
 
 
 class Finding:
-    def __init__(self, editor):
+    def __init__(self, editor, option):
         self.text = ''
-        self.is_whole_word = False
-        self.is_case_sensitive = False
-        self.is_regular = False
-        self.is_show_message = False
-        self.is_auto_close = False
-        self.is_research = False
+        self.option = option
         self.editor = editor
 
     def get_find_reg(self):
         if self.text:
-            if self.is_whole_word:
+            if self.option.is_whole_word:
                 reg = QtCore.QRegExp(r'\b' + self.text + r'\b')
             else:
                 reg = QtCore.QRegExp(self.text)
-            if self.is_case_sensitive:
+            if self.option.is_case_sensitive:
                 reg.setCaseSensitivity(QtCore.Qt.CaseSensitive)
             else:
                 reg.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
@@ -1298,7 +1293,7 @@ class Finding:
             self.editor.setTextCursor(cursor)
             self.editor.set_status_msg("")
         else:
-            if self.is_research and count > 0:
+            if self.option.is_research and count > 0:
                 # 先頭から再検索
                 cursor = self.editor.textCursor()
                 if is_back:
@@ -1314,7 +1309,7 @@ class Finding:
                 msg = u"△" if is_back else u"▽"
                 msg += u"見つかりませんでした"
                 self.editor.set_status_msg(msg)
-                if self.is_show_message:
+                if self.option.is_show_message:
                     self.editor.show_message_box(msg, u"%sに文字列「%s」が見つかりませんでした！" % (u"後方(↑)" if is_back else u"前方(↓)", self.text))
 
     def show_finded_text_pos(self):
