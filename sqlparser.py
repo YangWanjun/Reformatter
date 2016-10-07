@@ -1,4 +1,4 @@
-# coding: UTF-8
+﻿# coding: UTF-8
 """
 See links for example yacc SQL grammars:
 http://yaxx.googlecode.com/svn/trunk/sql/sql2.y
@@ -104,12 +104,16 @@ class SqlLexer(object):
         'exclusive'                    : 'EXCLUSIVE',
         'execute'                      : 'EXECUTE',
         'exists'                       : 'EXISTS',
+        'expand'                       : 'EXPAND',
         'external'                     : 'EXTERNAL',
         'extract'                      : 'EXTRACT',
+        'fast'                         : 'FAST',
         'fetch'                        : 'FETCH',
         'final_l'                      : 'FINAL_L',
         'float'                        : 'FLOAT',
         'for'                          : 'FOR',
+        'force'                        : 'FORCE',
+        'forced'                       : 'FORCED',
         'foreach'                      : 'FOREACH',
         'foreign'                      : 'FOREIGN',
         'fortran'                      : 'FORTRAN',
@@ -126,10 +130,12 @@ class SqlLexer(object):
         'grouping'                     : 'GROUPING',
         'hash'                         : 'HASH',
         'having'                       : 'HAVING',
+        'hint'                         : 'HINT',
         'htmlstr'                      : 'HTMLSTR',
         'identified'                   : 'IDENTIFIED',
         'identity'                     : 'IDENTITY',
         'if'                           : 'IF',
+        'ignore_nonclustered_columnstore_index' : 'IGNORE_NONCLUSTERED_COLUMNSTORE_INDEX',
         'in'                           : 'IN',
         'increment_l'                  : 'INCREMENT_L',
         'index'                        : 'INDEX',
@@ -150,6 +156,8 @@ class SqlLexer(object):
         'is'                           : 'IS',
         'java'                         : 'JAVA',
         'join'                         : 'JOIN',
+        'keep'                         : 'KEEP',
+        'keepfixed'                    : 'KEEPFIXED',
         'key'                          : 'KEY',
         'keyset'                       : 'KEYSET',
         'kwd_tag'                      : 'KWD_TAG',
@@ -161,6 +169,8 @@ class SqlLexer(object):
         'long'                         : 'LONG',
         'loop'                         : 'LOOP',
         'max'                          : 'MAX',
+        'maxdop'                       : 'MAXDOP',
+        'maxrecursion'                 : 'MAXRECURSION',
         'method'                       : 'METHOD',
         'min'                          : 'MIN',
         'modifies'                     : 'MODIFIES',
@@ -191,6 +201,7 @@ class SqlLexer(object):
         'on'                           : 'ON',
         'open'                         : 'OPEN',
         'option'                       : 'OPTION',
+        'optimize'                     : 'OPTIMIZE',
         'or'                           : 'OR',
         'order'                        : 'ORDER',
         'out'                          : 'OUT',
@@ -199,10 +210,13 @@ class SqlLexer(object):
         'over'                         : 'OVER',
         'overriding'                   : 'OVERRIDING',
         'parameter'                    : 'PARAMETER',
+        'parameterization'             : 'PARAMETERIZATION',
+        'partition'                    : 'PARTITION',
         'pascal_l'                     : 'PASCAL_L',
         'password'                     : 'PASSWORD',
         'permission_set'               : 'PERMISSION_SET',
         'persistent'                   : 'PERSISTENT',
+        'plan'                         : 'PLAN',
         'pli'                          : 'PLI',
         'precision'                    : 'PRECISION',
         'prefetch'                     : 'PREFETCH',
@@ -215,6 +229,7 @@ class SqlLexer(object):
         'readonly'                     : 'READONLY',
         'reads'                        : 'READS',
         'real'                         : 'REAL',
+        'recompile'                    : 'RECOMPILE',
         'ref'                          : 'REF',
         'references'                   : 'REFERENCES',
         'referencing'                  : 'REFERENCING',
@@ -229,6 +244,7 @@ class SqlLexer(object):
         'revoke'                       : 'REVOKE',
         'rexecute'                     : 'REXECUTE',
         'right'                        : 'RIGHT',
+        'robust'                       : 'ROBUST',
         'role_l'                       : 'ROLE_L',
         'rollback'                     : 'ROLLBACK',
         'rollup'                       : 'ROLLUP',
@@ -239,6 +255,7 @@ class SqlLexer(object):
         'self_l'                       : 'SELF_L',
         'set'                          : 'SET',
         'shutdown'                     : 'SHUTDOWN',
+        'simple'                       : 'SIMPLE',
         'smallint'                     : 'SMALLINT',
         'snapshot'                     : 'SNAPSHOT',
         'soft'                         : 'SOFT',
@@ -275,17 +292,18 @@ class SqlLexer(object):
         'under'                        : 'UNDER',
         'union'                        : 'UNION',
         'unique'                       : 'UNIQUE',
+        'unknown'                      : 'UNKNOWN',
         'unrestricted'                 : 'UNRESTRICTED',
         'update'                       : 'UPDATE',
         'use'                          : 'USE',
         'user'                         : 'USER',
         'using'                        : 'USING',
-        'value'                        : 'VALUE',
         'values'                       : 'VALUES',
         'varbinary'                    : 'VARBINARY',
         'varchar'                      : 'VARCHAR',
         'variable'                     : 'VARIABLE',
         'view'                         : 'VIEW',
+        'views'                        : 'VIEWS',
         'when'                         : 'WHEN',
         'whenever'                     : 'WHENEVER',
         'where'                        : 'WHERE',
@@ -381,7 +399,6 @@ class SqlLexer(object):
                   'INDEX_COL',
                   'INDEXKEY_PROPERTY',
                   'INDEXPROPERTY',
-                  # 'NEXT VALUE FOR',
                   'OBJECT_DEFINITION',
                   'OBJECT_ID',
                   'OBJECT_NAME',
@@ -404,6 +421,7 @@ class SqlLexer(object):
               'BITAND',
               'BITNOT',
               'BITOR',
+              'COL_ALIAS',
               'COLON',
               'COMMA',
               'COMPOUND',
@@ -482,7 +500,7 @@ class SqlLexer(object):
         return t
 
     def t_ID(self, t):
-        r'[a-zA-Z_][a-zA-Z_0-9$]*'
+        r'([^\x01-\x7E]+|[a-zA-Z_]+)([^\x01-\x7E]+|[a-zA-Z_0-9$]+)*'
         t.type = SqlLexer.reserved.get(t.value.lower(),'ID')    # Check for reserved words
         # redis is case sensitive in hash keys but we want the sql to be case insensitive,
         # so we lowercase identifiers
@@ -504,6 +522,10 @@ class SqlLexer(object):
         #t.value[1:-1]
         return t
 
+    def t_COL_ALIAS(self, t):
+        '[^\x01-\x7E]+'
+        return t
+
     # Define a rule so we can track line numbers
     def t_newline(self, t):
         r'\n+'
@@ -520,16 +542,17 @@ class SqlLexer(object):
         return self.lexer
 
     def test(self):
+        #while True:
+        #text = raw_input("sql> ").strip()
+        text = u'select * FROM KNY_DB.dbo.TB_KNY契約情報 TK3'
+        #if text.lower() == "quit":
+        #    break
+        self.lexer.input(text)
         while True:
-            text = raw_input("sql> ").strip()
-            if text.lower() == "quit":
+            tok = self.lexer.token()
+            if not tok:
                 break
-            self.lexer.input(text)
-            while True:
-                tok = self.lexer.token()
-                if not tok:
-                    break
-                print tok
+            print tok
 
 
 # TODO: consider using a more formal AST representation
@@ -1719,17 +1742,24 @@ class SqlParser(object):
         sql_option : ORDER
                    | HASH
                    | LOOP
-                   | INDEX identifier
-                   | INDEX PRIMARY KEY
-                   | INDEX TEXT_L KEY
+                   | EXPAND VIEWS
+                   | FAST NUMBER
+                   | FORCE ORDER
+                   | IGNORE_NONCLUSTERED_COLUMNSTORE_INDEX
+                   | KEEP PLAN
+                   | KEEPFIXED PLAN
+                   | MAXDOP NUMBER
+                   | MAXRECURSION NUMBER
+                   | OPTIMIZE FOR LPAREN parameter EQ NUMBER RPAREN
+                   | OPTIMIZE FOR UNKNOWN
+                   | PARAMETERIZATION SIMPLE
+                   | PARAMETERIZATION FORCED
+                   | RECOMPILE
+                   | ROBUST PLAN
+                   | TABLE HINT LPAREN identifier COMMA table_hint RPAREN
         """
-        if len(p) == 2:
-            sql = p[1]
-        else:
-            if isinstance(p[2], Node):
-                sql = '%s %s' % (p[1], p[2].sql)
-            else:
-                sql = ' '.join(p[1:])
+        s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
+        sql = ' '.join(s_list)
         p[0] = Node('sql_option', p, sql)
 
     def p_sql_opt_commalist(self, p):
@@ -1751,7 +1781,7 @@ class SqlParser(object):
         if len(p) == 1:
             sql = ''
         else:
-            sql = '%s (%s)' % (p[1], p[3].sql)
+            sql = '\n%s (%s)' % (p[1], p[3].sql)
         p[0] = Node('opt_sql_opt', p, sql)
 
     def p_opt_table_opt(self, p):
@@ -2067,11 +2097,11 @@ class SqlParser(object):
 
     def p_table_ref_commalist(self, p):
         """
-        table_ref_commalist : table_ref opt_with_table_hint
+        table_ref_commalist : table_ref
                             | table_ref_commalist COMMA table_ref
         """
-        if len(p) == 3:
-            sql = "%s %s" % (p[1].sql, p[2].sql)
+        if len(p) == 2:
+            sql = p[1].sql
         else:
             sql = '%s\n, %s' % (p[1].sql, p[3].sql)
         p[0] = Node('table_ref_commalist', p, sql)
@@ -2158,7 +2188,7 @@ class SqlParser(object):
 
     def p_table_ref(self, p):
         """
-        table_ref : table
+        table_ref : table opt_with_table_hint
                   | LPAREN query_exp RPAREN identifier
                   | LPAREN query_exp RPAREN AS identifier
                   | joined_table
@@ -2166,6 +2196,8 @@ class SqlParser(object):
         """
         if len(p) == 2:
             sql = p[1].sql
+        elif len(p) == 3:
+            sql = '%s %s' % (p[1].sql, p[2].sql)
         elif len(p) == 5:
             query_exp = common.set_indent(p[2].sql, ' ' * 3)
             sql = '(%s\n  ) %s' % (query_exp, p[4].sql)
@@ -2178,7 +2210,7 @@ class SqlParser(object):
 
     def p_table_ref_nj(self, p):
         """
-        table_ref_nj : table
+        table_ref_nj : table opt_with_table_hint
                      | subquery identifier
                      | subquery AS identifier
                      | LPAREN joined_table RPAREN
@@ -2517,9 +2549,17 @@ class SqlParser(object):
                              | MIN LPAREN opt_all_distinct scalar_exp RPAREN
                              | SUM LPAREN opt_all_distinct scalar_exp RPAREN
                              | COUNT LPAREN opt_all_distinct scalar_exp RPAREN
+                             | AVG LPAREN opt_all_distinct scalar_exp RPAREN over_clause
+                             | MAX LPAREN opt_all_distinct scalar_exp RPAREN over_clause
+                             | MIN LPAREN opt_all_distinct scalar_exp RPAREN over_clause
+                             | SUM LPAREN opt_all_distinct scalar_exp RPAREN over_clause
+                             | COUNT LPAREN opt_all_distinct scalar_exp RPAREN over_clause
         """
         sql_opt_all_distinct = p[3].sql + ' ' if p[3].sql else ''
-        sql = '%s(%s%s)' % (p[1], sql_opt_all_distinct, p[4].sql)
+        if len(p) == 6:
+            sql = '%s(%s%s)' % (p[1], sql_opt_all_distinct, p[4].sql)
+        else:
+            sql = '%s(%s%s) %s' % (p[1], sql_opt_all_distinct, p[4].sql, p[6].sql)
         p[0] = Node('general_set_function', p, sql)
 
     def p_scalar_exp_no_col_ref(self, p):
@@ -2623,15 +2663,13 @@ class SqlParser(object):
         """
         as_expression : scalar_exp AS identifier data_type
                       | scalar_exp AS identifier
+                      | scalar_exp AS STRING
+                      | scalar_exp AS COL_ALIAS
                       | scalar_exp identifier
                       | scalar_exp AS mssql_xml_col
         """
-        if len(p) == 3:
-            sql = '%s %s' % (p[1].sql, p[2].sql)
-        elif len(p) == 4:
-            sql = '%s %s %s' % (p[1].sql, p[2], p[3].sql)
-        else:
-            sql = '%s %s %s %s' % (p[1].sql, p[2], p[3].sql, p[4].sql)
+        s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
+        sql = ' '.join(s_list)
         p[0] = Node('as_expression', p, sql)
 
     def p_array_ref(self, p):
@@ -3663,7 +3701,6 @@ class SqlParser(object):
         """
         condition : NOT FOUND
                   | SQLSTATE STRING
-                  | SQLSTATE VALUE STRING
                   | SQLEXCEPTION
                   | SQLWARNING
         """
@@ -4630,10 +4667,42 @@ class SqlParser(object):
 
     def p_row_number(self, p):
         """
-        row_number : ROW_NUMBER LPAREN RPAREN OVER LPAREN ORDER BY ordering_spec_commalist RPAREN
+        row_number : ROW_NUMBER LPAREN RPAREN over_clause_for_order
         """
-        sql = '%s() %s(%s %s %s)' % (p[1], p[4], p[6], p[7], p[8].sql)
+        sql = '%s() %s' % (p[1], p[4])
         p[0] = Node('row_number', p, sql)
+
+    def p_over_clause(self, p):
+        """
+        over_clause : OVER LPAREN PARTITION BY ordering_spec_commalist RPAREN
+                    | over_clause_for_order
+        """
+        if len(p) == 7:
+            sql = '%s(%s %s %s)' % (p[1], p[3], p[4], p[5].sql)
+        else:
+            sql = p[1].sql
+        p[0] = Node('over_clause', p, sql)
+
+    def p_over_clause_for_order(self, p):
+        """
+        over_clause_for_order : OVER LPAREN opt_partition_by_clause ORDER BY ordering_spec_commalist RPAREN
+        """
+        sql = '%s(%s %s %s %s)' % (p[1], p[3].sql, p[4], p[5], p[6].sql)
+        p[0] = Node('over_clause_for_order', p, sql)
+
+    def p_opt_partition_by_clause(self, p):
+        """
+        opt_partition_by_clause : PARTITION BY ordering_spec_commalist
+                                |
+        """
+        if len(p) == 1:
+            sql = ''
+        else:
+            sql_partition_by_clause = p[3].sql
+            if sql_partition_by_clause.find('\n') >= 0:
+                sql_partition_by_clause = common.set_indent(p[3].set_list_break('ordering_spec'), ' ' * 5)
+            sql = '\n %s %s %s' % (p[1], p[2], sql_partition_by_clause)
+        p[0] = Node('opt_partition_by_clause', p, sql)
 
     def p_member_observer_no_id_chain(self, p):
         """
@@ -4822,5 +4891,5 @@ def unittest_parser(mode):
 if __name__ == "__main__":
     import sys
     mode = sys.argv[1] if len(sys.argv) == 2 else None 
-    #unittest_lexer(mode)
+    #unittest_lexer()
     unittest_parser(mode)
