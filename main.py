@@ -56,8 +56,8 @@ class MainWindow(QtGui.QMainWindow):
         file_menu = QtGui.QMenu(u"ファイル(&F)", self)
         self.menuBar().addMenu(file_menu)
 
-        file_menu.addAction(u"新規(&N)", self.new_file, "Ctrl+N")
-        file_menu.addAction(u"開く(&O)...", self.open_file, "Ctrl+O")
+        file_menu.addAction(common.get_icon('new_file'), u"新規(&N)", self.new_file, "Ctrl+N")
+        file_menu.addAction(common.get_icon('open_file'), u"開く(&O)...", self.open_file, "Ctrl+O")
         codec_menu = file_menu.addMenu(u"開き直す")
         signal_mapper = QtCore.QSignalMapper(self)
         for codec in sorted(CodeEditor.CODEC_LIST):
@@ -136,10 +136,10 @@ class MainWindow(QtGui.QMainWindow):
 
         action = view_menu.addAction(u"ウインドウを表示／隠す(&B)", self.show_bottom_window, "F4")
         path = os.path.join(common.get_root_path(), r"icons/win_v_sep.png")
-        action.setIcon(QtGui.QIcon(path))
+        action.setIcon(common.get_icon('win_v_sep.png'))
         action = view_menu.addAction(u"ウインドウを表示／隠す(&R)", self.show_right_window, "F6")
         path = os.path.join(common.get_root_path(), r"icons/win_h_sep.png")
-        action.setIcon(QtGui.QIcon(path))
+        action.setIcon(common.get_icon('win_h_sep.png'))
         view_menu.addSeparator()
 
         self.toolbar_menu = QtGui.QMenu(u"ツールバー(&T)", self)

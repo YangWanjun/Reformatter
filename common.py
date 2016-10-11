@@ -3,6 +3,7 @@
 import os
 
 from PyQt4.QtCore import QVariant
+from PyQt4.QtGui import QIcon
 
 
 def get_tab_space_count():
@@ -24,6 +25,11 @@ def set_indent(sql, indent):
 
 def get_root_path():
     return os.path.abspath(os.path.dirname(__file__))
+
+
+def get_icon(name):
+    path = os.path.join(get_root_path(), 'icons', name)
+    return QIcon(path)
 
 
 def get_db_type(t):
