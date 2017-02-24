@@ -34,13 +34,13 @@ class SqlLexer(object):
         'attach'                       : 'ATTACH',
         'attribute'                    : 'ATTRIBUTE',
         'autoregister_l'               : 'AUTOREGISTER_L',
-        'avg'                          : 'AVG',
         'backup'                       : 'BACKUP',
         'before'                       : 'BEFORE',
         'begin'                        : 'BEGIN',
         'begin_fn_x'                   : 'BEGIN_FN_X',
         'begin_u_x'                    : 'BEGIN_U_X',
         'between'                      : 'BETWEEN',
+        'bigint'                       : 'BIGINT',
         'binary'                       : 'BINARY',
         'binarynum'                    : 'BINARYNUM',
         'by'                           : 'BY',
@@ -48,7 +48,6 @@ class SqlLexer(object):
         'called'                       : 'CALLED',
         'cascade'                      : 'CASCADE',
         'case'                         : 'CASE',
-        'cast'                         : 'CAST',
         'catch'                        : 'CATCH',
         'char'                         : 'CHAR',
         'character'                    : 'CHARACTER',
@@ -66,9 +65,7 @@ class SqlLexer(object):
         'constraint'                   : 'CONSTRAINT',
         'constructor'                  : 'CONSTRUCTOR',
         'contains'                     : 'CONTAINS',
-        'convert'                      : 'CONVERT',
         'corresponding'                : 'CORRESPONDING',
-        'count'                        : 'COUNT',
         'create'                       : 'CREATE',
         'cross'                        : 'CROSS',
         'cube'                         : 'CUBE',
@@ -97,7 +94,6 @@ class SqlLexer(object):
         'dtd'                          : 'DTD',
         'dynamic'                      : 'DYNAMIC',
         'else'                         : 'ELSE',
-        'encoding'                     : 'ENCODING',
         'end'                          : 'END',
         'escape'                       : 'ESCAPE',
         'except'                       : 'EXCEPT',
@@ -127,7 +123,6 @@ class SqlLexer(object):
         'goto'                         : 'GOTO',
         'grant'                        : 'GRANT',
         'group'                        : 'GROUP',
-        'grouping'                     : 'GROUPING',
         'hash'                         : 'HASH',
         'having'                       : 'HAVING',
         'hint'                         : 'HINT',
@@ -168,14 +163,14 @@ class SqlLexer(object):
         'logx'                         : 'LOGX',
         'long'                         : 'LONG',
         'loop'                         : 'LOOP',
-        'max'                          : 'MAX',
         'maxdop'                       : 'MAXDOP',
         'maxrecursion'                 : 'MAXRECURSION',
         'method'                       : 'METHOD',
-        'min'                          : 'MIN',
         'modifies'                     : 'MODIFIES',
         'modify'                       : 'MODIFY',
         'module'                       : 'MODULE',
+        'money'                        : 'MONEY',
+        'smallmoney'                   : 'SMALLMONEY',
         'mssql_xmlcol_intnum'          : 'MSSQL_XMLCOL_INTNUM',
         'mssql_xmlcol_name'            : 'MSSQL_XMLCOL_NAME',
         'mssql_xmlcol_name1'           : 'MSSQL_XMLCOL_NAME1',
@@ -187,7 +182,6 @@ class SqlLexer(object):
         'nchar'                        : 'NCHAR',
         'new'                          : 'NEW',
         'next'                         : 'NEXT',
-        'no'                           : 'NO',
         'nonincremental'               : 'NONINCREMENTAL',
         'not'                          : 'NOT',
         'null'                         : 'NULL',
@@ -271,12 +265,11 @@ class SqlLexer(object):
         'static_l'                     : 'STATIC_L',
         'string_concat_operator'       : 'STRING_CONCAT_OPERATOR',
         'style'                        : 'STYLE',
-        'sum'                          : 'SUM',
         'sync'                         : 'SYNC',
         'system'                       : 'SYSTEM',
         'table'                        : 'TABLE',
         'temporary'                    : 'TEMPORARY',
-        'text_l'                       : 'TEXT_L',
+        'text'                         : 'TEXT',
         'then'                         : 'THEN',
         'ties'                         : 'TIES',
         'time'                         : 'TIME',
@@ -340,6 +333,20 @@ class SqlLexer(object):
         'tablockx'                     : 'TABLOCKX',
         'updlock'                      : 'UPDLOCK',
         'xlock'                        : 'XLOCK',    }
+
+    func_aggregate = {
+        'avg'                          : 'AVG',
+        'count'                        : 'COUNT',
+        'grouping'                     : 'GROUPING',
+        'max'                          : 'MAX',
+        'min'                          : 'MIN',
+        'sum'                          : 'SUM',
+    }
+
+    func_conversion = {
+        'cast'                         : 'CAST',
+        'convert'                      : 'CONVERT',
+    }
 
     globals = ['CONNECTIONS',
                'CPU_BUSY',
@@ -447,7 +454,7 @@ class SqlLexer(object):
               'SEMI',
               'STRING',
               'TIMES',
-             ] + list(reserved.values()) + ['GLOBAL_' + i for i in globals]
+             ] + list(reserved.values()) + list(func_aggregate.values()) + list(func_conversion.values()) + ['GLOBAL_' + i for i in globals]
 
     t_ignore  = ' \t'
 
@@ -501,7 +508,12 @@ class SqlLexer(object):
 
     def t_ID(self, t):
         r'([^\x01-\x7E]+|[a-zA-Z_]+)([^\x01-\x7E]+|[a-zA-Z_0-9$]+)*'
-        t.type = SqlLexer.reserved.get(t.value.lower(),'ID')    # Check for reserved words
+        if t.value.lower() in SqlLexer.reserved:
+            t.type = SqlLexer.reserved.get(t.value.lower(), 'ID')
+        elif t.value.lower() in SqlLexer.func_aggregate:
+            t.type = SqlLexer.func_aggregate.get(t.value.lower(), 'ID')
+        elif t.value.lower() in SqlLexer.func_conversion:
+            t.type = SqlLexer.func_conversion.get(t.value.lower(), 'ID')
         # redis is case sensitive in hash keys but we want the sql to be case insensitive,
         # so we lowercase identifiers
         if t.type != 'ID':
@@ -557,23 +569,71 @@ class SqlLexer(object):
 
 # TODO: consider using a more formal AST representation
 class Node(object):
-    def __init__(self, name, p, sql):
-        self.name = name
-        self.children = self.get_children(p)
-        self.sql = sql
 
-    def get_children(self, p):
-        if not p:
-            return []
-        if len(p) == 1:
-            return []
-        else:
-            return [i for i in p[1:] if isinstance(i, Node)]
+    TABLE_NAME = 'table_name'
+    TABLE_ALIAS = 'table_alias'
+    COLUMN_NAME = 'column_name'
+
+    RECURSION_FUNCTION = {
+        'coalesce_exp': ('scalar_exp_commalist', 'scalar_exp'),
+    }
+
+    def __init__(self, name, p, sql, lexpos=None, new_line_dict=None):
+        self.parent = None
+        self.alias_for_table = None
+        self.name = name
+        self.children = self.init_sub_nodes(p)
+        self.sql = sql
+        self.lexpos = lexpos
+        self.data_type = None
+        # 改行のTOKENと先頭空白文字
+        self.new_line_dict = new_line_dict
+        self.indent = ''
 
     def to_sql(self):
-        name_list = self.get_children_name()
-        # print ', '.join(list(set(name_list)))
-        return self.sql
+        #return self.sql
+        clause_list = []
+        for n in self.children:
+            if isinstance(n, Node):
+                clause_list.append(n.to_sql())
+            else:
+                if self.new_line_dict and n in self.new_line_dict:
+                    indent = ' ' * self.new_line_dict[n]
+                    n = '\n' + self.indent + indent + n
+                clause_list.append(n)
+        clause_list = [s for s in clause_list if s and s.strip()]
+        if not clause_list:
+            return ''
+        elif len(clause_list) == 1:
+            return clause_list[0]
+        else:
+            sql = ''
+            for i, s in enumerate(clause_list):
+                if s in ['(', ')'] or s.startswith('('):
+                    sql += s
+                elif s == ',':
+                    sql += s
+                elif i == 0:
+                    sql += s
+                elif clause_list[i - 1] in ['(']:
+                    sql += s
+                else:
+                    sql += ' ' + s
+            return sql
+
+    def print_route(self):
+        name_list = self.get_children()
+        for node in name_list:
+            if node.sql and node.sql.strip():
+                print "%s:\n\t%s\n%s" % (node.name, common.set_indent(node.sql, '\t'), '=' * 50)
+
+    def get_children(self):
+        node_list = []
+        node_list.append(self)
+        for child in self.children:
+            if isinstance(child, Node):
+                node_list.extend(child.get_children())
+        return node_list
 
     def get_children_name(self):
         name_list = []
@@ -594,10 +654,125 @@ class Node(object):
             return self.sql
 
         for child in self.children:
-            sql = child.set_sub_list_break(name)
-            if sql:
-                sqls.append(sql)
+            if isinstance(child, Node):
+                sql = child.set_sub_list_break(name)
+                if sql:
+                    sqls.append(sql)
+            else:
+                sqls.append(child)
         return '\n, '.join(sqls)
+
+    def get_child_nodes(self, name):
+        children = []
+        if self.name == name:
+            children.append(self)
+        else:
+            for child in self.children:
+                if isinstance(child, Node):
+                    children.extend(child.get_child_nodes(name))
+        return children
+
+    def get_parent_node(self, name_list):
+        if self.parent is None or name_list is None:
+            return None
+        if not isinstance(name_list, list):
+            name_list = [name_list]
+        parent = self.parent
+        while parent is not None:
+            if parent.name in name_list:
+                return parent
+            parent = parent.parent
+        return None
+
+    def get_table_name(self):
+        if self.data_type == Node.COLUMN_NAME:
+            if self.parent and self.parent.name == 'column_ref':
+                if len(self.parent.children) == 3:
+                    table_alias_node = self.parent.children[0]
+                    return table_alias_node.get_table_by_alias(table_alias_node.sql, self.sql)
+                else:
+                    query_spec_node = self.get_parent_node('query_spec')
+                    if query_spec_node:
+                        table_list = query_spec_node.get_child_nodes('q_table_name')
+                        if len(table_list) == 1:
+                            for n in table_list[0].children:
+                                if isinstance(n, Node) and n.data_type == Node.TABLE_NAME:
+                                    return n.sql.replace('[', '').replace(']', '')
+        return ''
+
+    def get_table_by_alias(self, alias_name, column_name=None):
+        query_spec_node = self.get_parent_node('query_spec')
+        if query_spec_node:
+            alias_list = query_spec_node.get_child_nodes('identifier')
+            for alias_node in alias_list:
+                # 別名から検索
+                if alias_node.sql == alias_name and alias_node.alias_for_table is not None:
+                    if alias_node.alias_for_table.name == 'q_table_name':
+                        for n in alias_node.alias_for_table.children:
+                            if isinstance(n, Node) and n.data_type == Node.TABLE_NAME:
+                                return n.sql.replace('[', '').replace(']', '')
+                    elif alias_node.alias_for_table.name == 'subquery':
+                        return alias_node.alias_for_table.get_table_by_column_name(column_name)
+            else:
+                # テーブル名から検索
+                table_list = query_spec_node.get_child_nodes('q_table_name')
+                for table_node in table_list:
+                    for n in table_node.children:
+                        if isinstance(n, Node) and n.data_type == Node.TABLE_NAME and n.sql == alias_name:
+                            return n.sql.replace('[', '').replace(']', '')
+        return None
+
+    def get_table_by_column_name(self, column_name):
+        if not column_name:
+            return None
+        column_list = self.get_child_nodes('identifier')
+        for column_node in column_list:
+            if column_node.data_type == Node.COLUMN_NAME:
+                if column_node.sql == column_name:
+                    return column_node.get_table_name()
+        return None
+
+    def get_parameters(self):
+        return self.get_child_nodes('parameter')
+
+    def init_sub_nodes(self, p):
+        """構文解析時、当該結び目の直下の結び目を設定する。
+        """
+        if not p:
+            return []
+        if len(p) == 1:
+            return []
+        else:
+            lst = p[1:]
+            for n in lst:
+                if isinstance(n, Node):
+                    n.parent = self
+            return lst
+
+    def set_function_indent(self):
+        """メソッドのインデント、改行を設定する。
+        """
+        # 再帰のメソッドでなければ、終了する。
+        if self.name not in Node.RECURSION_FUNCTION:
+            return
+        recursion_name, recursion_item_name = Node.RECURSION_FUNCTION.get(self.name, (None, None))
+        # 再帰の結び目でなければ、終了する。
+        if not recursion_name or not recursion_item_name:
+            return
+        # 再帰する結び目を取得する。
+        recursion_node = None
+        for n in self.children:
+            if isinstance(n, Node) and n.name == recursion_name:
+                recursion_node = n
+                break
+        if recursion_node:
+            pass
+
+    def get_recursion_items(self, recursion_name, recursion_item_name):
+        node_list = []
+        for n in self.children:
+            if isinstance(n, Node) and n.name == recursion_name:
+                pass
 
 
 class SqlParser(object):
@@ -1473,118 +1648,6 @@ class SqlParser(object):
         sql = ' '.join(s_list)
         p[0] = Node('refresh_snapshot', p, sql)
 
-    def p_create_freetext_index(self, p):
-        """
-        create_freetext_index : CREATE TEXT_L opt_xml INDEX ON q_table_name LPAREN column RPAREN opt_with_key opt_deffer_generation opt_with opt_data_modification_action opt_lang opt_enc
-        """
-        s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
-        sql = ' '.join(s_list)
-        p[0] = Node('create_freetext_index', p, sql)
-
-    def p_opt_data_modification_action(self, p):
-        """
-        opt_data_modification_action : USING FUNCTION
-                                     |
-        """
-        if len(p) == 1:
-            sql = ''
-        else:
-            sql = '%s %s' % (p[1], p[2])
-        p[0] = Node('opt_data_modification_action', p, sql)
-
-    def p_opt_column(self, p):
-        """
-        opt_column : LPAREN column RPAREN
-                   |
-        """
-        if len(p) == 1:
-            sql = ''
-        else:
-            sql = '(%s)' % (p[2].sql,)
-        p[0] = Node('opt_column', p, sql)
-
-    def p_create_freetext_trigger(self, p):
-        """
-        create_freetext_trigger : CREATE TEXT_L TRIGGER ON q_table_name opt_column
-        """
-        s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
-        sql = ' '.join(s_list)
-        p[0] = Node('create_freetext_trigger', p, sql)
-
-    def p_drop_freetext_trigger(self, p):
-        """
-        drop_freetext_trigger : DROP TEXT_L TRIGGER ON q_table_name opt_column
-        """
-        s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
-        sql = ' '.join(s_list)
-        p[0] = Node('drop_freetext_trigger', p, sql)
-
-    def p_opt_xml(self, p):
-        """
-        opt_xml : XML
-                |
-        """
-        if len(p) == 1:
-            sql = ''
-        else:
-            sql = p[1]
-        p[0] = Node('opt_xml', p, sql)
-
-    def p_opt_with_key(self, p):
-        """
-        opt_with_key : WITH KEY column
-                     |
-        """
-        if len(p) == 1:
-            sql = ''
-        else:
-            sql = '%s %s %s' % (p[1], p[2], p[3].sql)
-        p[0] = Node('opt_with_key', p, sql)
-
-    def p_opt_with(self, p):
-        """
-        opt_with : CLUSTERED WITH LPAREN column_commalist RPAREN
-                 |
-        """
-        if len(p) == 1:
-            sql = ''
-        else:
-            sql = '%s %s (%s)' % (p[1], p[2], p[4].sql)
-        p[0] = Node('opt_with', p, sql)
-
-    def p_opt_lang(self, p):
-        """
-        opt_lang : 
-                 | LANGUAGE STRING
-        """
-        if len(p) == 1:
-            sql = ''
-        else:
-            sql = '%s %s' % (p[1], p[2])
-        p[0] = Node('opt_lang', p, sql)
-
-    def p_opt_enc(self, p):
-        """
-        opt_enc : 
-                | ENCODING STRING
-        """
-        if len(p) == 1:
-            sql = ''
-        else:
-            sql = '%s %s' % (p[1], p[2])
-        p[0] = Node('opt_enc', p, sql)
-
-    def p_opt_deffer_generation(self, p):
-        """
-        opt_deffer_generation : 
-                              | NOT INSERT
-        """
-        if len(p) == 1:
-            sql = ''
-        else:
-            sql = '%s %s' % (p[1], p[2])
-        p[0] = Node('opt_deffer_generation', p, sql)
-
     def p_manipulative_statement(self, p):
         """
         manipulative_statement : query_exp
@@ -1613,9 +1676,6 @@ class SqlParser(object):
                                | create_snapshot
                                | drop_snapshot
                                | refresh_snapshot
-                               | create_freetext_index
-                               | create_freetext_trigger
-                               | drop_freetext_trigger
         """
         sql = p[1].sql
         p[0] = Node('manipulative_statement', p, sql)
@@ -1701,6 +1761,7 @@ class SqlParser(object):
     def p_insert_statement(self, p):
         """
         insert_statement : INSERT insert_mode table priv_opt_column_commalist values_or_query_spec
+                         | INSERT insert_mode parameter priv_opt_column_commalist values_or_query_spec
         """
         sql_priv_opt_column_commalist = ' ' + p[4].sql if p[4].sql else ''
         sql = '%s %s %s%s %s' % (p[1], p[2].sql, p[3].sql, sql_priv_opt_column_commalist, p[5].sql)
@@ -1712,7 +1773,7 @@ class SqlParser(object):
                              | query_spec
         """
         if len(p) == 2:
-            sql = p[1].sql
+            sql = '\n%s' % (p[1].sql,)
         else:
             sql = '\n%s \n     ( %s\n     )' % (p[1], p[3].sql)
         p[0] = Node('values_or_query_spec', p, sql)
@@ -1733,7 +1794,7 @@ class SqlParser(object):
         insert_atom : scalar_exp
         """
         sql_insert_atom = p[1].sql
-        if str(sql_insert_atom).find('\n') >= 0:
+        if unicode(sql_insert_atom).find('\n') >= 0:
             sql_insert_atom = common.set_indent(sql_insert_atom, ' ' * 5)
         p[0] = Node('insert_atom', p, sql_insert_atom)
 
@@ -1922,8 +1983,8 @@ class SqlParser(object):
         assignment : column comparison scalar_exp
         """
         sql_scalar_exp = p[3].sql
-        if str(sql_scalar_exp).find('\n') >= 0:
-            length = len(str(p[1].sql)) + len(p[2].sql) + 2 + 5
+        if unicode(sql_scalar_exp).find('\n') >= 0:
+            length = len(unicode(p[1].sql)) + len(p[2].sql) + 2 + 5
             sql_scalar_exp = common.set_indent(sql_scalar_exp, ' ' * length)
         sql = '%s %s %s' % (p[1].sql, p[2].sql, sql_scalar_exp)
         p[0] = Node('assignment', p, sql)
@@ -1979,9 +2040,9 @@ class SqlParser(object):
         if len(p) == 2:
             sql = p[1].sql
         elif len(p) == 5:
-            sql = '%s %s %s %s' % (p[1].sql, p[2], p[3].sql, p[4].sql)
+            sql = '%s\n%s\n%s %s' % (p[1].sql, p[2], p[3].sql, p[4].sql)
         else:
-            sql = '%s %s %s %s %s' % (p[1].sql, p[2], p[3], p[4].sql, p[5].sql)
+            sql = '%s\n%s %s\n%s %s' % (p[1].sql, p[2], p[3], p[4].sql, p[5].sql)
         p[0] = Node('query_exp', p, sql)
 
     def p_non_final_union_exp(self, p):
@@ -1997,9 +2058,9 @@ class SqlParser(object):
         if len(p) == 2:
             sql = p[1].sql
         elif len(p) == 5:
-            sql = '%s %s %s %s' % (p[1].sql, p[2], p[3].sql, p[4].sql)
+            sql = '%s\n%s\n%s %s' % (p[1].sql, p[2], p[3].sql, p[4].sql)
         else:
-            sql = '%s %s %s %s %s' % (p[1].sql, p[2], p[3], p[4].sql, p[5].sql)
+            sql = '%s\n%s %s\n%s %s' % (p[1].sql, p[2], p[3], p[4].sql, p[5].sql)
         p[0] = Node('non_final_union_exp', p, sql)
 
     def p_non_final_query_term(self, p):
@@ -2017,7 +2078,8 @@ class SqlParser(object):
         if len(p) == 2:
             sql = p[1].sql
         else:
-            sql = '(%s)%s' % (p[2].sql, ' ' + p[4].sql if p[4].sql else '')
+            sql_query_exp = common.set_indent(p[2].sql, ' ' * 3)
+            sql = '(%s)%s' % (sql_query_exp, ' ' + p[4].sql if p[4].sql else '')
         p[0] = Node('query_term', p, sql)
 
     def p_opt_corresponding(self, p):
@@ -2035,7 +2097,9 @@ class SqlParser(object):
         """
         non_final_query_spec : SELECT opt_top selection non_final_table_exp
         """
-        sql = '%s %s %s %s' % (p[1], p[2].sql, p[3].sql, p[4].sql)
+        sql_opt_top = ' ' + p[2].sql if p[2].sql else ''
+        sql_selection = "\n       " + common.set_indent(p[3].sql, '     ') if sql_opt_top else common.set_indent(p[3].sql, '     ')
+        sql = '%s%s %s %s' % (p[1], sql_opt_top, sql_selection, p[4].sql)
         p[0] = Node('non_final_query_spec', p, sql)
 
     def p_query_spec(self, p):
@@ -2070,7 +2134,7 @@ class SqlParser(object):
         sql_opt_where_clause = ' ' + p[2].sql if p[2].sql else ''
         sql_opt_group_by_clause = ' ' + p[3].sql if p[3].sql else ''
         sql_opt_having_clause = ' ' + p[4].sql if p[4].sql else ''
-        sql = '%s%s%s%s' % (p[1].sql, sql_opt_where_clause, sql_opt_group_by_clause, sql_opt_having_clause)
+        sql = '\n  %s%s%s%s' % (p[1].sql, sql_opt_where_clause, sql_opt_group_by_clause, sql_opt_having_clause)
         p[0] = Node('non_final_table_exp', p, sql)
 
     def p_table_exp(self, p):
@@ -2219,9 +2283,13 @@ class SqlParser(object):
             sql = p[1].sql
         elif len(p) == 3:
             sql = '%s %s' % (p[1].sql, p[2].sql)
+            p[2].data_type = Node.TABLE_ALIAS
+            p[2].alias_for_table = p[1]
         else:
             if isinstance(p[1], Node):
                 sql = '%s %s %s' % (p[1].sql, p[2], p[3].sql)
+                p[3].data_type = Node.TABLE_ALIAS
+                p[3].alias_for_table = p[1]
             else:
                 sql = '(%s)' % (p[2].sql,)
         p[0] = Node('table_ref_nj', p, sql)
@@ -2499,10 +2567,10 @@ class SqlParser(object):
 
     def p_subquery(self, p):
         """
-        subquery : LPAREN SELECT opt_top selection table_exp RPAREN
+        subquery : LPAREN query_spec RPAREN
+                 | LPAREN query_no_from_spec RPAREN
         """
-        sql_table_exp = common.set_indent(p[5].sql, ' ' * 3)
-        sql = '(%s%s %s %s\n  )' % (p[2], ' ' + p[3].sql if p[3].sql else '', p[4].sql, sql_table_exp)
+        sql = '(%s%s)' % (p[2].sql, '\n' if p[2].sql.find('\n') >= 0 else '')
         p[0] = Node('subquery', p, sql)
 
     def p_scalar_exp(self, p):
@@ -2837,7 +2905,10 @@ class SqlParser(object):
             sql = p[1].sql
         else:
             sql = '%s, %s' % (p[1].sql, p[3].sql)
-        p[0] = Node('scalar_exp_commalist', p, sql)
+        new_line_dict = {
+            ',': 0,
+        }
+        p[0] = Node('scalar_exp_commalist', p, sql, new_line_dict=new_line_dict)
 
     def p_select_scalar_exp_commalist(self, p):
         """
@@ -2850,7 +2921,10 @@ class SqlParser(object):
             sql = p[1].sql
         else:
             sql = '%s\n, %s' % (p[1].sql, p[3].sql)
-        p[0] = Node('scalar_exp_commalist', p, sql)
+        new_line_dict = {
+            ',': 5,
+        }
+        p[0] = Node('scalar_exp_commalist', p, sql, new_line_dict=new_line_dict)
 
     def p_atom_no_obe(self, p):
         """
@@ -2919,7 +2993,11 @@ class SqlParser(object):
             sql = '%s %s' % (p[1], p[2].sql)
         else:
             sql = '%s %s %s %s' % (p[1], p[2].sql, p[3], p[4].sql)
-        p[0] = Node('simple_when', p, sql)
+        new_line_dict = {
+            'WHEN': 4,
+            'ELSE': 4,
+        }
+        p[0] = Node('simple_when', p, sql, new_line_dict=new_line_dict)
 
     def p_searched_when(self, p):
         """
@@ -2930,7 +3008,11 @@ class SqlParser(object):
             sql = '%s %s' % (p[1], p[2].sql)
         else:
             sql = '%s %s %s %s' % (p[1], p[2].sql, p[3], p[4].sql)
-        p[0] = Node('searched_when', p, sql)
+        new_line_dict = {
+            'WHEN': 4,
+            'ELSE': 4,
+        }
+        p[0] = Node('searched_when', p, sql, new_line_dict=new_line_dict)
 
     def p_coalesce_exp(self, p):
         """
@@ -2952,11 +3034,11 @@ class SqlParser(object):
         sql_scalar_exp_2 = p[5].sql
         rparen = ')'
         sql_comma = ', '
-        if str(sql_scalar_exp_1).find('\n') >= 0:
+        if unicode(sql_scalar_exp_1).find('\n') >= 0:
             sql_scalar_exp_1 = ' ' + common.set_indent(sql_scalar_exp_1, ' ' * 8)
             rparen = '\n  )'
             sql_comma = '\n        , '
-        if str(sql_scalar_exp_2).find('\n') >= 0:
+        if unicode(sql_scalar_exp_2).find('\n') >= 0:
             sql_scalar_exp_2 = common.set_indent(sql_scalar_exp_2, ' ' * 8)
             rparen = '\n  )'
             sql_comma = '\n        , '
@@ -3000,7 +3082,7 @@ class SqlParser(object):
                 | FLOAT_NUM
                 | APPROXNUM
                 | BINARYNUM
-                | NULLX
+                | NULL
         """
         sql = p[1]
         p[0] = Node('literal', p, sql)
@@ -3033,13 +3115,21 @@ class SqlParser(object):
         """
         if len(p) == 2:
             sql = p[1].sql
+            pos = p[1].lexpos
+            p[1].data_type = Node.TABLE_NAME
         elif len(p) == 4:
             sql = '%s.%s' % (p[1].sql, p[3].sql)
+            pos = p[3].lexpos
+            p[3].data_type = Node.TABLE_NAME
         elif len(p) == 5:
             sql = '%s..%s' % (p[1].sql, p[4].sql)
+            pos = p[4].lexpos
+            p[4].data_type = Node.TABLE_NAME
         else:
             sql = '%s.%s.%s' % (p[1].sql, p[3].sql, p[5].sql)
-        p[0] = Node('q_table_name', p, sql)
+            pos = p[5].lexpos
+            p[5].data_type = Node.TABLE_NAME
+        p[0] = Node('q_table_name', p, sql, pos)
 
     def p_attach_q_table_name(self, p):
         """
@@ -3102,8 +3192,12 @@ class SqlParser(object):
             sql = '%s%s' % (p[1].sql, ' ' + p[2].sql if p[2].sql else '')
         elif len(p) == 4:
             sql = '%s %s%s' % (p[1].sql, p[2].sql, ' ' + p[3].sql if p[3].sql else '')
+            p[2].data_type = Node.TABLE_ALIAS
+            p[2].alias_for_table = p[1]
         else:
             sql = '%s %s %s%s' % (p[1].sql, p[2], p[3].sql, ' ' + p[4].sql if p[4].sql else '')
+            p[3].data_type = Node.TABLE_ALIAS
+            p[3].alias_for_table = p[1]
         p[0] = Node('table', p, sql)
 
     def p_column_ref(self, p):
@@ -3120,19 +3214,40 @@ class SqlParser(object):
                    | identifier PERIOD PERIOD identifier PERIOD TIMES
         """
         if len(p) == 2:
-            last_sql = p[1].sql if isinstance(p[1], Node) else p[1]
+            if isinstance(p[1], Node):
+                last_sql = p[1].sql
+                p[1].data_type = Node.COLUMN_NAME
+            else:
+                last_sql = p[1]
             sql = last_sql
         elif len(p) == 4:
-            last_sql = p[3].sql if isinstance(p[3], Node) else p[3]
+            if isinstance(p[3], Node):
+                last_sql = p[3].sql
+                p[1].data_type = Node.TABLE_ALIAS
+                p[3].data_type = Node.COLUMN_NAME
+            else:
+                last_sql = p[3]
             sql = '%s.%s' % (p[1].sql, last_sql)
         elif len(p) == 6:
-            last_sql = p[5].sql if isinstance(p[5], Node) else p[5]
+            if isinstance(p[5], Node):
+                last_sql = p[5].sql
+                p[5].data_type = Node.COLUMN_NAME
+            else:
+                last_sql = p[5]
             sql = '%s.%s.%s' % (p[1].sql, p[3].sql, last_sql)
         elif len(p) == 8:
-            last_sql = p[7].sql if isinstance(p[7], Node) else p[7]
+            if isinstance(p[7], Node):
+                last_sql = p[7].sql
+                p[7].data_type = Node.COLUMN_NAME
+            else:
+                last_sql = p[7]
             sql = '%s.%s.%s.%s' % (p[1].sql, p[3].sql, p[5].sql, last_sql)
         else:
-            last_sql = p[6].sql if isinstance(p[6], Node) else p[6]
+            if isinstance(p[6], Node):
+                last_sql = p[6].sql
+                p[6].data_type = Node.COLUMN_NAME
+            else:
+                last_sql = p[6]
             sql = '%s..%s.%s' % (p[1].sql, p[4].sql, last_sql)
         p[0] = Node('column_ref', p, sql)
 
@@ -3146,6 +3261,7 @@ class SqlParser(object):
                        | DECIMAL data_type_length2
                        | INTEGER
                        | INT
+                       | BIGINT
                        | SMALLINT
                        | FLOAT
                        | REAL
@@ -3166,6 +3282,9 @@ class SqlParser(object):
                        | NCHAR data_type_length1
                        | NVARCHAR
                        | NVARCHAR data_type_length1
+                       | MONEY
+                       | SMALLMONEY
+                       | TEXT
                        | LBRACKET NUMERIC RBRACKET
                        | LBRACKET NUMERIC RBRACKET data_type_length1
                        | LBRACKET NUMERIC RBRACKET data_type_length2
@@ -3174,6 +3293,7 @@ class SqlParser(object):
                        | LBRACKET DECIMAL RBRACKET data_type_length2
                        | LBRACKET INTEGER RBRACKET
                        | LBRACKET INT RBRACKET
+                       | LBRACKET BIGINT RBRACKET
                        | LBRACKET SMALLINT RBRACKET
                        | LBRACKET FLOAT RBRACKET
                        | LBRACKET REAL RBRACKET
@@ -3305,13 +3425,13 @@ class SqlParser(object):
     def p_parameter(self, p):
         """
         parameter : QUESTION
-                  | COLON ID
-                  | AT ID
+                  | COLON identifier
+                  | AT identifier
         """
         if len(p) == 2:
             sql = p[1]
         else:
-            sql = '%s%s' % (p[1], p[2])
+            sql = '%s%s' % (p[1], p[2].sql)
         p[0] = Node('parameter', p, sql)
 
     def p_identifier(self, p):
@@ -3321,9 +3441,11 @@ class SqlParser(object):
         """
         if len(p) == 2:
             sql = p[1]
+            pos = p.lexpos(1)
         else:
             sql = '[%s]' % (p[2],)
-        p[0] = Node('identifier', None, sql)
+            pos = p.lexpos(2) + 1
+        p[0] = Node('identifier', p, sql, pos)
 
     def p_global(self, p):
         """
@@ -3362,7 +3484,7 @@ class SqlParser(object):
                | GLOBAL_VERSION
         """
         sql = p[1]
-        p[0] = Node('global', None, sql)
+        p[0] = Node('global', p, sql)
 
     def p_user(self, p):
         """
@@ -3430,6 +3552,8 @@ class SqlParser(object):
         """
         routine_declaration : CREATE routine_head new_table_name rout_parameter_list opt_return rout_alt_type AS compound_statement
                             | CREATE routine_head new_table_name rout_parameter_list opt_return rout_alt_type compound_statement
+                            | ALTER routine_head new_table_name rout_parameter_list opt_return rout_alt_type AS compound_statement
+                            | ALTER routine_head new_table_name rout_parameter_list opt_return rout_alt_type compound_statement
                             | ATTACH routine_head attach_q_table_name rout_parameter_list opt_return rout_alt_type opt_as FROM literal
                             | CREATE routine_head new_table_name rout_parameter_list opt_return rout_alt_type LANGUAGE external_language_name EXTERNAL NAME_L STRING opt_type_option_list
         """
@@ -3476,12 +3600,15 @@ class SqlParser(object):
     def p_opt_return(self, p):
         """
         opt_return : RETURNS data_type_ref
+                   | RETURNS parameter TABLE LPAREN base_table_element_commalist RPAREN
                    |
         """
         if len(p) == 1:
             sql = ''
-        else:
+        elif len(p) == 3:
             sql = '\n%s %s' % (p[1], p[2].sql)
+        else:
+            sql = '\n%s %s %s (%s)' % (p[1], p[2].sql, p[3], p[5].sql)
         p[0] = Node('opt_return', p, sql)
 
     def p_rout_parameter_list(self, p):
@@ -3634,7 +3761,7 @@ class SqlParser(object):
 
     def p_statement_in_cs(self, p):
         """
-        statement_in_cs : local_declaration SEMI
+        statement_in_cs : local_declaration
                         | compound_statement
                         | statement_in_cs_oper
         """
@@ -3667,7 +3794,7 @@ class SqlParser(object):
                   | control_statement
         """
         s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
-        sql = ' '.join(s_list)
+        sql = common.set_indent('\n' + ' '.join(s_list), ' ' * 4)
         p[0] = Node('statement', p, sql)
 
     def p_local_declaration(self, p):
@@ -3731,6 +3858,7 @@ class SqlParser(object):
                           | return_statement SEMI
                           | return_statement
                           | assignment_statement SEMI
+                          | select_assignment
                           | if_statement
                           | goto_statement SEMI
                           | for_statement
@@ -3739,6 +3867,14 @@ class SqlParser(object):
         s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
         sql = ' '.join(s_list)
         p[0] = Node('control_statement', p, sql)
+
+    def p_select_assignment(self, p):
+        """
+        select_assignment : SELECT assignment_statement table_exp
+        """
+        s_list = [i.sql if isinstance(i, Node) else i for i in p[1:]]
+        sql = ' '.join(s_list)
+        p[0] = Node('select_assignment', p, sql)
 
     def p_assignment_statement(self, p):
         """
@@ -4526,7 +4662,6 @@ class SqlParser(object):
                               | PARAMETER STYLE GENERAL
                               | DETERMINISTIC
                               | NOT DETERMINISTIC
-                              | NO SQL_L
                               | CONTAINS SQL_L
                               | READS SQL_L DATA
                               | MODIFIES SQL_L DATA

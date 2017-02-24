@@ -85,6 +85,12 @@ class SqlQueryModel(QtCore.QAbstractTableModel):
         return QtCore.QVariant()
 
 
+class SqlTableQueryModel(QtSql.QSqlQueryModel):
+    def __init__(self, data_table, parent=None):
+        super(SqlTableQueryModel, self).__init__(parent)
+        self.table = data_table
+
+
 class SqlTableModel(QtSql.QSqlTableModel):
     def __init__(self, data_table, db, parent=None):
         super(SqlTableModel, self).__init__(parent, db)

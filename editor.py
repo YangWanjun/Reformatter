@@ -1,13 +1,15 @@
 #coding: UTF-8
 #!/usr/bin/env python
 
-import os, re
+import os
+import re
 import common, constants, settings
+import functools
 
 from PyQt4 import QtCore, QtGui, QtSql
 from highlighter import SqlHighlighter
-from sqlparser import SqlLexer, SqlParser
-from model import DataColumn, DataRow, DataTable, SqlQueryModel, SqlTableModel, TableItemDelegate
+from sqlparser import SqlLexer, SqlParser, Node
+from model import DataColumn, DataRow, DataTable, SqlQueryModel, SqlTableQueryModel, SqlTableModel, TableItemDelegate
 
 
 class Editors(QtGui.QTabWidget):
@@ -21,6 +23,13 @@ class Editors(QtGui.QTabWidget):
         self.tabCloseRequested.connect(self.removeTab)
         self.currentChanged.connect(self.current_changed)
 
+        css = '''
+        QTabWidget::pane {
+            border-top: 1px solid gray;
+        }
+        '''
+        self.setStyleSheet(css)
+
     def add_editor(self, path):
         if path:
             filename = os.path.basename(unicode(path))
@@ -33,7 +42,7 @@ class Editors(QtGui.QTabWidget):
         else:
             filename = self.get_untitled_name()
 
-        editor = SqlEditor(self, path, options=self.options)
+        editor = SqlEditor(self, path, options=self.options, connection=self.get_last_connection())
         self.addTab(editor, filename)
         self.setCurrentWidget(editor)
         if path:
@@ -44,22 +53,28 @@ class Editors(QtGui.QTabWidget):
         return editor.code_editor
 
     def add_table(self, table_name, connection):
-        editor = SqlTable(self, table_name, connection, self.options)
-        self.addTab(editor, table_name)
-        self.setCurrentWidget(editor)
-        editor.setWindowState(QtCore.Qt.WindowActive)
-        editor.setFocus(QtCore.Qt.ActiveWindowFocusReason)
-        self.set_window_title()
-        return editor
+        if connection is None:
+            connection = self.get_main_window().connect_database()
+        if connection:
+            editor = SqlTable(self, table_name, connection, self.options)
+            self.addTab(editor, table_name)
+            self.setCurrentWidget(editor)
+            editor.setWindowState(QtCore.Qt.WindowActive)
+            editor.setFocus(QtCore.Qt.ActiveWindowFocusReason)
+            self.set_window_title()
+            return editor
 
     def add_table_edit(self, table_name, connection):
-        editor = SqlTableEdit(self, table_name, connection, self.options)
-        self.addTab(editor, table_name)
-        self.setCurrentWidget(editor)
-        editor.setWindowState(QtCore.Qt.WindowActive)
-        editor.setFocus(QtCore.Qt.ActiveWindowFocusReason)
-        self.set_window_title()
-        return editor
+        if connection is None:
+            connection = self.get_main_window().connect_database()
+        if connection:
+            editor = SqlTableEdit(self, table_name, connection, self.options)
+            self.addTab(editor, table_name)
+            self.setCurrentWidget(editor)
+            editor.setWindowState(QtCore.Qt.WindowActive)
+            editor.setFocus(QtCore.Qt.ActiveWindowFocusReason)
+            self.set_window_title()
+            return editor
 
     def open_file(self, path=None, codec=None, folder=None):
         if not path:
@@ -77,13 +92,27 @@ class Editors(QtGui.QTabWidget):
             editor = self.add_editor(path)
             editor.codec = codec
             in_file = QtCore.QFile(path)
-            if in_file.open(QtCore.QFile.ReadOnly | QtCore.QFile.Text):
+            if in_file.isReadable():
+                mode = QtCore.QFile.ReadWrite | QtCore.QFile.Text
+            else:
+                mode = QtCore.QFile.ReadOnly | QtCore.QFile.Text
+                QtGui.QMessageBox.information(self, '', constants.MSG_FILE_READONLY)
+            if in_file.open(mode):
                 text_stream = QtCore.QTextStream(in_file)
                 text_stream.setCodec(codec)
                 text = text_stream.readAll()
                 editor.bom = text_stream.generateByteOrderMark()
                 editor.codec = str(text_stream.codec().name())
                 editor.setPlainText(text)
+                # editor.set_readonly(in_file.isReadable())
+            else:
+                QtGui.QMessageBox.information(self, '', constants.MSG_FILE_CANNOT_READ)
+
+    def save_file(self):
+        pass
+
+    def save_as_file(self):
+        pass
 
     def get_untitled_name(self):
         self.untitled_name_index += 1
@@ -92,13 +121,21 @@ class Editors(QtGui.QTabWidget):
     def get_editor_by_path(self, path):
         if path:
             for i in range(self.count()):
-                editor = self.widget(i).code_editor
-                if editor.path == path:
-                    return editor
+                if hasattr(self.widget(i), 'code_editor'):
+                    editor = self.widget(i).code_editor
+                    if editor.path == path:
+                        return editor
         return None
 
     def get_main_window(self):
         return self.parentWidget()
+
+    def get_last_connection(self):
+        for i in range(self.count()):
+            tab = self.widget(i)
+            if isinstance(tab, SqlEditor) or isinstance(tab, SqlTable):
+                return tab.connection
+        return None
 
     def set_window_title(self):
         if not self.currentWidget():
@@ -124,7 +161,7 @@ class Editors(QtGui.QTabWidget):
     def current_changed(self, index):
         self.set_window_title()
         tab = self.currentWidget()
-        if isinstance(tab, SqlEditor):
+        if isinstance(tab, SqlEditor) or isinstance(tab, SqlTable):
             self.get_main_window().init_db_toolbar(tab.connection)
 
     def eventFilter(self, obj, event):
@@ -168,12 +205,13 @@ class EditorTabBar(QtGui.QTabBar):
             border-right: 1px solid gray;
             border-top-left-radius: 5px;
             border-top-right-radius: 5px;
+            border-bottom-width: 0px;
         }
         QTabBar:tab:selected {
             color: blue;
             border-color: blue;
-            background-color: white;
-            border-bottom-width: 0px;
+            background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                              stop: 0 #FFAA00, stop: 0.4 #FFFFFF);
         }
         '''
         self.setStyleSheet(css)
@@ -221,26 +259,11 @@ class SqlEditorBase(QtGui.QWidget):
 
         self.setLayout(layout)
 
-    def show_all_tables(self):
-        if not self.connection:
-            return
-        self.table_list = SqlTableList(self.connection, self)
-        for table in self.connection.get_all_tables():
-            item = QtGui.QTreeWidgetItem(self.table_list)
-            item.setChildIndicatorPolicy(QtGui.QTreeWidgetItem.ShowIndicator)
-            item.setData(0, QtCore.Qt.DisplayRole, table)
-            item.setData(0, QtCore.Qt.UserRole, table)
-            path = os.path.join(common.get_root_path(), r"icons/data_table.png")
-            item.setIcon(0, QtGui.QIcon(path))
-            self.table_list.addTopLevelItem(item)
-        self.right_splitter.addWidget(self.table_list)
-        self.right_splitter.setSizes([700, 300])
-        self.right_splitter.setStretchFactor(0, 1)
-        self.right_splitter.setStretchFactor(1, 0)
+    def get_window_title(self):
+        pass
 
     def set_connection(self, connection):
         self.connection = connection
-        self.show_all_tables()
 
     def execute_sql(self):
         pass
@@ -259,11 +282,26 @@ class SqlEditorBase(QtGui.QWidget):
             else:
                 self.table_list.setVisible(True)
 
+    def show_sql_error(self, last_error):
+        if last_error.isValid():
+            title = last_error.driverText()
+            msg = last_error.databaseText()
+            if msg.contains(u"通信リンク"):
+                msg += u"\nもう1回実行してください。"
+                self.connection.db.open()
+            QtGui.QMessageBox.information(self, title, msg if msg else title)
+            self.status_bar.showMessage(last_error.text())
+            return True
+        else:
+            return False
+
 
 class SqlEditor(SqlEditorBase):
     def __init__(self, parent=None, path=None, codec=None, options=None, connection=None):
         super(SqlEditor, self).__init__(parent, options, connection)
         self.code_editor = None
+        self.param_widget = None
+        self.param_splitter = None
         self.result_views = QtGui.QTabWidget()
         self.init_layout(path, codec)
 
@@ -278,7 +316,9 @@ class SqlEditor(SqlEditorBase):
     def init_layout(self, path, codec):
         # エディター
         self.code_editor = CodeEditor(self.bottom_splitter, path, codec, options=self.options)
-        self.bottom_splitter.addWidget(self.code_editor)
+        self.param_splitter = QtGui.QSplitter(QtCore.Qt.Horizontal, self)
+        self.param_splitter.addWidget(self.code_editor)
+        self.bottom_splitter.addWidget(self.param_splitter)
 
     def closeEvent(self, event):
         self.save_settings()
@@ -290,11 +330,17 @@ class SqlEditor(SqlEditorBase):
             self.show_count_message(count)
 
     def execute_sql(self):
+        params = self.get_parameters()
+        # params が NULL の場合パラメータがない
+        if params is not None:
+            # params が 空白リストの場合、パラメーターダイアログでパラメータを入力する必要がある。
+            if not params:
+                return
         sql = self.code_editor.toPlainText()
         if not self.connection.is_open():
             self.connection.open()
 
-        models = self.connection.execute_sql(sql)
+        models = self.connection.execute_sql(sql, params)
         if not models:
             return
         # データ検索の場合
@@ -302,23 +348,43 @@ class SqlEditor(SqlEditorBase):
             self.result_views.clear()
             for model in models:
                 self.show_select_result(model)
+        elif isinstance(models, QtSql.QSqlError):
+            self.show_sql_error(models)
 
-    def show_sql_error(self, last_error):
-        if last_error.isValid():
-            title = last_error.driverText()
-            msg = last_error.databaseText()
-            QtGui.QMessageBox.information(self, title, msg if msg else title)
-            return True
+    def get_file_path(self):
+        return self.code_editor.path
+
+    def get_parameters(self):
+        parameters = self.code_editor.get_parameters()
+        if parameters:
+            if self.param_widget is None:
+                self.param_widget = ParametersDialog(parameters, self)
+                self.param_splitter.addWidget(self.param_widget)
+                self.param_splitter.setSizes([700, 300])
+                self.param_splitter.setStretchFactor(0, 1)
+                self.param_splitter.setStretchFactor(1, 0)
+                return []
+            else:
+                if not self.param_widget.isVisible():
+                    self.param_widget.setVisible(True)
+                self.param_widget.parameters = parameters
+                if self.param_widget.init_layout():
+                    return []
+                else:
+                    return self.param_widget.parameters
         else:
-            return False
+            if self.param_widget is not None:
+                self.param_widget.hide()
+            return None
 
     def show_select_result(self, query_model):
         last_error = self.connection.last_error()
         if not self.show_sql_error(last_error):
             table_view = SqlQueryView()
+            table_view.setSortingEnabled(False)
             table_view.setModel(query_model)
             table_view.resizeColumnsToContents()
-            self.result_views.addTab(table_view, u"結果 %s" % (self.result_views.count() + 1,))
+            self.result_views.addTab(table_view, u"結果%s" % (self.result_views.count() + 1,))
             self.bottom_splitter.addWidget(self.result_views)
             if not self.result_views.isVisible():
                 self.result_views.setVisible(True)
@@ -328,9 +394,6 @@ class SqlEditor(SqlEditorBase):
             self.result_views.setVisible(False)
         elif self.result_views.count() > 0:
             self.result_views.setVisible(True)
-
-    def get_file_path(self):
-        return self.code_editor.path
 
     def save_settings(self):
         if self.options:
@@ -351,8 +414,11 @@ class SqlQueryView(QtGui.QTableView):
         super(SqlQueryView, self).__init__(parent)
         # 行の高さを設定
         self.verticalHeader().setDefaultSectionSize(22)
+        self.verticalHeader().setResizeMode(QtGui.QHeaderView.Fixed)
         # ヘッダーを設定
         self.setHorizontalHeader(SqlQueryHeader(is_show_filter=is_show_filter))
+        # 初回サイズ設定時（resizeColumnsToContents）を呼び出す時
+        self.is_first_resize = False
 
         css = '''
         QTableView {
@@ -363,6 +429,185 @@ class SqlQueryView(QtGui.QTableView):
         self.setStyleSheet(css)
         delegate = TableItemDelegate()
         self.setItemDelegate(delegate)
+        self.connect(self.horizontalScrollBar(), QtCore.SIGNAL('valueChanged(int)'), self.scroll_value_changed)
+        self.connect(self.horizontalScrollBar(), QtCore.SIGNAL('rangeChanged(int, int)'), self.scroll_range_changed)
+        self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.onCustomContextMenu)
+
+    def scroll_value_changed(self, value):
+        self.horizontalHeader().hide_all_filters()
+
+    def scroll_range_changed(self, min, max):
+        self.horizontalHeader().hide_all_filters()
+
+    def resizeColumnsToContents(self):
+        self.is_first_resize = True
+        super(SqlQueryView, self).resizeColumnsToContents()
+        self.is_first_resize = False
+
+    def sizeHintForColumn(self, column):
+        width = super(SqlQueryView, self).sizeHintForColumn(column)
+        header_width = self.horizontalHeader().get_section_width(column)
+        if width > 300 and self.is_first_resize:
+            return 300
+        elif header_width > width:
+            return header_width
+        else:
+            return width
+
+    def onCustomContextMenu(self, point):
+        index = self.indexAt(point)
+        if index.isValid():
+            menu = QtGui.QMenu(self)
+            menu.addAction(u"コピー(&C)", self.copy_value)
+            menu.addAction(u"ヘッダー付きコピー", lambda who=1: self.copy_value(who))
+            menu.addAction(u"ヘッダー付きコピー(HTML形式)", lambda who=2: self.copy_value(who, is_html=True))
+            point += QtCore.QPoint(self.verticalHeader().width(), self.horizontalHeader().height())
+            menu.exec_(self.mapToGlobal(point))
+
+    def copy_value(self, with_header=False, is_html=False):
+        selected_list = self.selectedIndexes()
+        # 必须按行重新排序，否则粘贴出来的东西会在同一列内
+        selected_list.sort(key=lambda idx: idx.row())
+
+        plain_text = ""
+        html_text = ''
+        current_row = 0
+        column_list = []
+        css = '''
+        <style type="text/css">
+        table {
+            font-size: 13px;
+        }
+        tbody td { 
+            border-style: solid;
+            border-width: thin;
+            white-space: nowrap;
+            background-color: rgb(146,205,220);
+        }
+        .text {mso-number-format:"\@";}
+        .num {mso-number-format:General;}
+        .null_style {
+            border-style: solid;
+            border-width: thin;
+            white-space: nowrap;
+            background-color: rgb(255,255,204);
+        }
+        .header_style {
+            font-weight: bold;
+            border-style: solid;
+            border-width: thin;
+            background-color: rgb(242,242,242);
+            white-space: nowrap;
+        }
+        .primary_key {
+            color: red;
+            font-weight: bold;
+            border-style: solid;
+            border-width: thin;
+            background-color: rgb(242,242,242);
+            white-space: nowrap;
+        }
+        .type_style {
+            border-style: solid;
+            border-width: thin;
+            color: rgb(63,63,63);
+            white-space: nowrap;
+            background-color: rgb(242,242,242);
+        }
+        .type_nullable_style {
+            border-style: solid;
+            border-width: thin;
+            color: rgb(63,63,63);
+            white-space: nowrap;
+            background-color: rgb(191,191,191);
+        }
+        </style>
+        '''
+        for i, index in enumerate(selected_list):
+            if index.column() not in column_list:
+                column_list.append(index.column())
+
+            if i == 0:
+                pass
+            elif index.row() != current_row:
+                plain_text += "\n"
+                html_text += "</tr><tr>"
+            else:
+                plain_text += "\t"
+                html_text += ''
+            current_row = index.row()
+            if index.data().isNull():
+                plain_text += "NULL"
+                html_text += '<td class="null_style">NULL</td>'
+            else:
+                column = self.model().table.Columns[index.column()]
+                if unicode(column.type)[:8].lower() in ('datetime',):
+                    plain_text += index.data().toDateTime().toString("yyyy-MM-dd HH:mm:ss.zzz")
+                    html_text += '<td class="text">%s</td>' % (index.data().toDateTime().toString("yyyy-MM-dd HH:mm:ss.zzz"),)
+                elif unicode(column.type).lower() in ('int', 'smallint', 'bigint'):
+                    plain_text += index.data().toString()
+                    html_text += '<td>%s</td>' % (index.data().toString(),)
+                elif index.data().toString() == ' ':
+                    plain_text += index.data().toString()
+                    html_text += '<td>&nbsp;</td>'
+                else:
+                    plain_text += index.data().toString()
+                    html_text += '<td class="text">%s</td>' % (index.data().toString().replace(' ', '&nbsp;'),)
+
+        plain_header_list = []
+        plain_type_list = []
+        html_header_list = []
+        html_type_list = []
+        for column in column_list:
+            column = self.model().table.Columns[column]
+            plain_name = unicode(column.name)
+            plain_type_len = unicode(column.get_type_len())
+            style = 'primary_key' if column.is_primary_key else 'header_style'
+            html_name = '<td class="%s">%s</td>' % (style, plain_name,)
+            style = 'type_nullable_style' if column.is_nullable else 'type_style'
+            html_type_len = '<td class="%s">%s</td>' % (style, plain_type_len,)
+            plain_header_list.append(plain_name)
+            plain_type_list.append(plain_type_len)
+            html_header_list.append(html_name)
+            html_type_list.append(html_type_len)
+        if with_header and plain_header_list and plain_type_list:
+            plain_text = "\t".join(plain_header_list) + "\n" + "\t".join(plain_type_list) + "\n" + plain_text
+            html_text = "<thead><tr>%s</tr><tr>%s</tr></thead><tbody><tr>%s</tr></tbody>" % ("".join(html_header_list), "".join(html_type_list), html_text)
+        data = QtCore.QMimeData()
+        if is_html:
+            html = '<html><head><title></title>%s</head><body><div>%s</div><table cellspacing="0" cellpadding="0">%s</table></body></html>' % (css, self.model().table.name, html_text)
+            data.setText(plain_text)
+            data.setHtml(html)
+        else:
+            data.setText(plain_text)
+        QtGui.QApplication.clipboard().setMimeData(data)
+
+    def get_tab_window(self):
+        parent_widget = self.parentWidget()
+        while not isinstance(parent_widget, Editors):
+            parent_widget = parent_widget.parentWidget()
+        return parent_widget
+
+    def keyPressEvent(self, event):
+        if event.modifiers() == (QtCore.Qt.ControlModifier | QtCore.Qt.ShiftModifier):
+            # Ctrl + Shift
+            if event.key() == QtCore.Qt.Key_Backtab:
+                # Ctrl + Shift + Tab
+                self.get_tab_window().move_to_prev()
+            else:
+                QtGui.QTableView.keyPressEvent(self, event)
+        elif event.modifiers() == QtCore.Qt.ControlModifier:
+            # Ctrl
+            if event.key() == QtCore.Qt.Key_C:
+                self.copy_value()
+            elif event.key() == QtCore.Qt.Key_Tab:
+                # Ctrl + Tab
+                self.get_tab_window().move_to_next()
+            else:
+                QtGui.QTableView.keyPressEvent(self, event)
+        else:
+            QtGui.QTableView.keyPressEvent(self, event)
 
 
 class SqlQueryHeader(QtGui.QHeaderView):
@@ -374,6 +619,7 @@ class SqlQueryHeader(QtGui.QHeaderView):
         self.le_filters = []
         self.ge_filters = []
         self.like_filters = []
+        self.order_filters = []
         self.is_show_filter = is_show_filter
 
         css = '''
@@ -384,8 +630,30 @@ class SqlQueryHeader(QtGui.QHeaderView):
             border-right-width: 0px;
             background-color: rgb(255, 251, 240);
         }
-        QHeaderView::section {
-            border: 1px solid gray;
+        /**QHeaderView::section {
+            background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                              stop:0 #616161, stop: 0.5 #505050,
+                                              stop: 0.6 #434343, stop:1 #656565);
+            color: white;
+            padding-left: 4px;
+            border: 1px solid #6c6c6c;
+        }
+        QHeaderView::section:checked
+        {
+            background-color: red;
+        }**/
+        /* style the sort indicator */
+        QHeaderView::down-arrow {
+            image: url(icons/arrow_down.png);
+            width: 12px;
+            height: 12px;
+            subcontrol-position: right;
+        }
+        QHeaderView::up-arrow {
+            image: url(icons/arrow_up.png);
+            width: 12px;
+            height: 12px;
+            subcontrol-position: right;
         }
         QLineEdit {
             border-top: 1px solid rgb(217, 217, 217);
@@ -395,18 +663,54 @@ class SqlQueryHeader(QtGui.QHeaderView):
         }
         '''
         self.setStyleSheet(css)
+        self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.onCustomContextMenu)
+
+    def onCustomContextMenu(self, point):
+        menu = QtGui.QMenu(self)
+        logical_index = self.logicalIndexAt(point)
+        if logical_index >= 0:
+            menu.addAction(u"非表示(&H)", lambda who=logical_index: self.hide_section(who))
+            if self.is_show_filter:
+                menu.addAction(u"絞り込み条件クリア(&C)", lambda who=logical_index: self.clear_filter(who))
+        menu.addAction(u"全て表示(&A)", self.show_all_section)
+        menu.exec_(self.mapToGlobal(point))
+
+    def show_all_section(self):
+        if self.sectionsHidden():
+            for i in range(self.count()):
+                if self.isSectionHidden(i):
+                    self.setSectionHidden(i, False)
+
+    def hide_section(self, logical_index):
+        self.setSectionHidden(logical_index, True)
+        # フィルターも一緒に非表示
+        if self.is_show_filter:
+            self.equal_filters[logical_index].hide()
+            self.ge_filters[logical_index].hide()
+            self.le_filters[logical_index].hide()
+            self.like_filters[logical_index].hide()
+            self.order_filters[logical_index].hide()
+
+    def clear_filter(self, logical_index):
+        if self.is_show_filter:
+            self.equal_filters[logical_index].clear()
+            self.ge_filters[logical_index].clear()
+            self.le_filters[logical_index].clear()
+            self.like_filters[logical_index].clear()
+            self.order_filters[logical_index].clear()
 
     def sizeHint(self):
         base_size = QtGui.QHeaderView.sizeHint(self)
         if self.is_show_filter:
-            base_size.setHeight(120)
+            base_size.setHeight(140)
         else:
             base_size.setHeight(44)
         return base_size
 
     def setModel(self, model):
         super(SqlQueryHeader, self).setModel(model)
-        if isinstance(model, SqlQueryModel) or isinstance(model, SqlTableModel):
+        if isinstance(model, SqlQueryModel) or isinstance(model, SqlTableModel) or isinstance(model, SqlTableQueryModel):
             self.columns = model.table.Columns
             self.init_filters()
 
@@ -423,79 +727,132 @@ class SqlQueryHeader(QtGui.QHeaderView):
             txt = FilterLineEdit(self, u"＝")
             txt.hide()
             self.equal_filters.append(txt)
-            self.connect(txt, QtCore.SIGNAL('textChanged(QString)'), self.handle_eq_change)
             # <= の絞り込み条件
             txt = FilterLineEdit(self, u"<=")
             txt.hide()
             self.le_filters.append(txt)
-            self.connect(txt, QtCore.SIGNAL('textChanged(QString)'), self.handle_le_change)
             # >= の絞り込み条件
             txt = FilterLineEdit(self, u">=")
             txt.hide()
             self.ge_filters.append(txt)
-            self.connect(txt, QtCore.SIGNAL('textChanged(QString)'), self.handle_ge_change)
             # LIKE の絞り込み条件
             txt = FilterLineEdit(self, u"LIKE")
             txt.hide()
             self.like_filters.append(txt)
-            self.connect(txt, QtCore.SIGNAL('textChanged(QString)'), self.handle_like_change)
+            # 並び順 の絞り込み条件
+            txt = FilterLineEdit(self, u"ORDER BY")
+            txt.hide()
+            self.order_filters.append(txt)
 
-    def handle_eq_change(self, text):
-        idx = -1
+    def get_section_width(self, index):
+        if index < 0 or index >= self.count():
+            return 0
+        if not self.columns:
+            return 0
+        column = self.columns[index]
+        type_len = column.get_type_len()
+        font_metrics = QtGui.QFontMetrics(self.font())
+        name_width = font_metrics.width(column.name)
+        type_width = font_metrics.width(type_len)
+        return name_width if name_width > type_width else type_width + 4
+
+    def hide_all_filters(self):
+        for i in range(len(self.equal_filters)):
+            txt = self.equal_filters[i]
+            txt.hide()
+            txt = self.ge_filters[i]
+            txt.hide()
+            txt = self.le_filters[i]
+            txt.hide()
+            txt = self.like_filters[i]
+            txt.hide()
+            txt = self.order_filters[i]
+            txt.hide()
+
+    def get_where_clause(self):
+        if self.equal_filters is None:
+            self.equal_filters = {}
+        if self.le_filters is None:
+            self.le_filters = {}
+        if self.ge_filters is None:
+            self.ge_filters = {}
+        if self.like_filters is None:
+            self.like_filters = {}
+        if self.order_filters is None:
+            self.order_filters = {}
+
+        sql = ''
+        wheres = []
         for i, txt in enumerate(self.equal_filters):
-            if txt.hasFocus():
-                idx = i
-                break
-        if idx >= 0:
-            column = self.columns[idx]
-            self.emit(QtCore.SIGNAL("eqFilterChanged(PyQt_PyObject)"), {"column": column, "value": text})
-
-    def handle_le_change(self, text):
-        idx = -1
+            if txt.text():
+                column = self.columns[i]
+                wheres.append("[%s]='%s'" % (column.name, txt.text()))
+        else:
+            if wheres:
+                sql += " AND " + " AND ".join(wheres)
+        wheres = []
         for i, txt in enumerate(self.le_filters):
-            if txt.hasFocus():
-                idx = i
-                break
-        if idx >= 0:
-            column = self.columns[idx]
-            self.emit(QtCore.SIGNAL("leFilterChanged(PyQt_PyObject)"), {"column": column, "value": text})
-
-    def handle_ge_change(self, text):
-        idx = -1
+            if txt.text():
+                column = self.columns[i]
+                wheres.append("[%s]<='%s'" % (column.name, txt.text()))
+        else:
+            if wheres:
+                sql += " AND " + " AND ".join(wheres)
+        wheres = []
         for i, txt in enumerate(self.ge_filters):
-            if txt.hasFocus():
-                idx = i
-                break
-        if idx >= 0:
-            column = self.columns[idx]
-            self.emit(QtCore.SIGNAL("geFilterChanged(PyQt_PyObject)"), {"column": column, "value": text})
-
-    def handle_like_change(self, text):
-        idx = -1
+            if txt.text():
+                column = self.columns[i]
+                wheres.append("[%s]>='%s'" % (column.name, txt.text()))
+        else:
+            if wheres:
+                sql += " AND " + " AND ".join(wheres)
+        wheres = []
         for i, txt in enumerate(self.like_filters):
-            if txt.hasFocus():
-                idx = i
-                break
-        if idx >= 0:
-            column = self.columns[idx]
-            self.emit(QtCore.SIGNAL("likeFilterChanged(PyQt_PyObject)"), {"column": column, "value": text})
+            if txt.text():
+                column = self.columns[i]
+                wheres.append("[%s] LIKE '%s'" % (column.name, txt.text()))
+        else:
+            if wheres:
+                sql += " AND " + " AND ".join(wheres)
+        if sql:
+            return sql[4:]
+        else:
+            return sql
+
+    def get_order_clause(self):
+        if not self.columns and not self.order_filters:
+            return None
+
+        orders = []
+        reg = re.compile(r'^\s*(\d+)\s*(asc|desc){0,1}\s*$', re.I)
+        for i, txt in enumerate(self.order_filters):
+            if txt.text():
+                column = self.columns[i]
+                m = reg.match(unicode(txt.text()))
+                if not m:
+                    txt.setText('')
+                    continue
+                orders.append((m.group(1), m.group(2), column.name))
+        if orders:
+            orders.sort(key=lambda x:x[0])
+            str_orders = ['%s%s' % (name, ' ' + o.upper() if o else '') for n, o, name in orders]
+            return ', '.join(str_orders)
+        else:
+            return None
 
     def paintSection(self, painter, rect, logical_index):
         if self.columns:
-            divide = 6 if self.is_show_filter else 2
+            divide = 7 if self.is_show_filter else 2
             column = self.columns[logical_index]
             type_length = column.get_type_len()
             # 列名のスタイル
             t_rect = QtCore.QRect(rect.x(), rect.y(), rect.width()-1, rect.height() / divide)
-            gradient = QtGui.QLinearGradient(t_rect.topLeft(), t_rect.bottomLeft())
-            gradient.setColorAt(0, QtCore.Qt.white)
-            gradient.setColorAt(0.5, QtGui.QColor(246, 247, 249))
-            gradient.setColorAt(1, QtCore.Qt.white)
-            painter.fillRect(t_rect, QtGui.QBrush(gradient))
-            painter.setPen(QtGui.QColor(216, 213, 204))
-            painter.drawLine(t_rect.bottomLeft(), t_rect.bottomRight())
-            painter.drawLine(rect.topRight(), rect.bottomRight())
+            painter.save()
+            QtGui.QHeaderView.paintSection(self, painter, t_rect, logical_index)
+            painter.restore()
             # 列型、長さなどのスタイル
+            painter.setPen(QtGui.QColor(216, 213, 204))
+            painter.drawLine(rect.topRight(), rect.bottomRight())
             b_rect = QtCore.QRect(rect.x(), rect.y() + (rect.height() / divide), rect.width() - 1, rect.height() / divide)
             if self.is_show_filter and column.is_nullable:
                 painter.fillRect(b_rect, QtGui.QBrush(QtGui.QColor(230, 230, 230)))
@@ -503,29 +860,33 @@ class SqlQueryHeader(QtGui.QHeaderView):
                 painter.setPen(QtCore.Qt.red)
             else:
                 painter.setPen(QtCore.Qt.black)
-            painter.drawText(t_rect, QtCore.Qt.AlignCenter, column.name)
             painter.drawText(b_rect, QtCore.Qt.AlignCenter, type_length)
 
-            if self.is_show_filter:
+            if self.is_show_filter and not self.isSectionHidden(logical_index):
                 # ＝ の絞り込み条件
                 txt = self.equal_filters[logical_index]
-                rect_eq = QtCore.QRect(rect.x(), rect.y() + (rect.height() / divide) * 2, rect.width() - 1, rect.height() / divide)
+                rect_eq = QtCore.QRect(rect.x() + 1, rect.y() + (rect.height() / divide) * 2, rect.width() - 2, rect.height() / divide)
                 txt.setGeometry(rect_eq)
                 txt.show()
                 # >= の絞り込み条件
                 txt = self.ge_filters[logical_index]
-                rect_ge = QtCore.QRect(rect.x(), rect.y() + (rect.height() / divide) * 3, rect.width() - 1, rect.height() / divide)
+                rect_ge = QtCore.QRect(rect.x() + 1, rect.y() + (rect.height() / divide) * 3, rect.width() - 2, rect.height() / divide)
                 txt.setGeometry(rect_ge)
                 txt.show()
                 # <= の絞り込み条件
                 txt = self.le_filters[logical_index]
-                rect_le = QtCore.QRect(rect.x(), rect.y() + (rect.height() / divide) * 4, rect.width() - 1, rect.height() / divide)
+                rect_le = QtCore.QRect(rect.x() + 1, rect.y() + (rect.height() / divide) * 4, rect.width() - 2, rect.height() / divide)
                 txt.setGeometry(rect_le)
                 txt.show()
                 # LIKE の絞り込み条件
                 txt = self.like_filters[logical_index]
-                rect_like = QtCore.QRect(rect.x(), rect.y() + (rect.height() / divide) * 5, rect.width() - 1, rect.height() / divide + 1)
+                rect_like = QtCore.QRect(rect.x() + 1, rect.y() + (rect.height() / divide) * 5, rect.width() - 2, rect.height() / divide)
                 txt.setGeometry(rect_like)
+                txt.show()
+                # 並び順 の絞り込み条件
+                txt = self.order_filters[logical_index]
+                rect_odder = QtCore.QRect(rect.x() + 1, rect.y() + (rect.height() / divide) * 6, rect.width() - 2, rect.height() / divide + 3)
+                txt.setGeometry(rect_odder)
                 txt.show()
         else:
             QtGui.QHeaderView.paintSection(self, painter, rect, logical_index)
@@ -550,7 +911,6 @@ class SqlTableList(QtGui.QTreeWidget):
         self.setHeaderHidden(True)
         self.connection = connection
         self.setColumnCount(1)
-        self.drag_start_position = None
 
         css = '''
         QTreeWidget {
@@ -587,42 +947,23 @@ class SqlTableList(QtGui.QTreeWidget):
         table_name = item.text(0)
         menu = QtGui.QMenu(self)
         user_data = item.data(0, QtCore.Qt.UserRole).toString()
-        if self.indexOfTopLevelItem(item) >= 0:
-            menu.addAction(u"上位 1000 件を抽出(&W)", lambda who=table_name: self.select_top_1000(table_name))
-            menu.addAction(u"テーブルのデータ編集(&E)", lambda who=table_name: self.edit_top_200(table_name))
+        if user_data == ConnectionListDocker.CATEGORY_TABLE:
+            menu.addAction(u"上位 256 件を抽出(&W)", lambda who=item: self.select_top_1000(item))
+            menu.addAction(u"テーブルのデータ編集(&E)", lambda who=item: self.edit_top_200(item))
             menu.addSeparator()
-        menu.addAction(u"コピー(&C)", lambda who=user_data: self.copy_name(user_data))
+        menu.addAction(u"コピー(&C)", lambda who=user_data: self.copy_name(table_name))
         menu.exec_(self.mapToGlobal(point))
 
-    def mousePressEvent(self, event):
-        super(SqlTableList, self).mousePressEvent(event)
-        if event.button() == QtCore.Qt.LeftButton:
-            self.drag_start_position = event.pos()
-
-    def mouseMoveEvent(self, event):
-        super(SqlTableList, self).mouseMoveEvent(event)
-        if not (event.buttons() == QtCore.Qt.LeftButton):
-            return
-        if not self.drag_start_position:
-            return
-        if (event.pos() - self.drag_start_position).manhattanLength() < QtGui.QApplication.startDragDistance():
-            return
-
-        item = self.itemAt(self.drag_start_position)
-        drag = QtGui.QDrag(self)
-        mime_data = QtCore.QMimeData()
-        mime_data.setText(item.data(0, QtCore.Qt.UserRole).toString())
-        drag.setMimeData(mime_data)
-        dropAction = drag.exec_(QtCore.Qt.CopyAction)
-
-    def select_top_1000(self, table_name):
+    def select_top_1000(self, item):
         tab = self.get_tab_widget()
         if tab:
+            table_name = item.text(0)
             tab.add_table(table_name, self.connection)
 
-    def edit_top_200(self, table_name):
+    def edit_top_200(self, item):
         tab = self.get_tab_widget()
         if tab:
+            table_name = item.text(0)
             tab.add_table_edit(table_name, self.connection)
 
     def copy_name(self, table_name):
@@ -635,71 +976,39 @@ class SqlTable(SqlEditorBase):
         super(SqlTable, self).__init__(parent, options, connection)
         self.table_name = table_name
         self.table_view = None
-        self.equal_filters = {}
-        self.le_filters = {}
-        self.ge_filters = {}
-        self.like_filters = {}
 
         self.init_layout()
         self.execute_sql()
 
     def init_layout(self):
         self.table_view = SqlQueryView(is_show_filter=True)
-        self.connect(self.table_view.horizontalHeader(), QtCore.SIGNAL('eqFilterChanged(PyQt_PyObject)'), self.filter_changed)
-        self.connect(self.table_view.horizontalHeader(), QtCore.SIGNAL('leFilterChanged(PyQt_PyObject)'), self.le_filter_changed)
-        self.connect(self.table_view.horizontalHeader(), QtCore.SIGNAL('geFilterChanged(PyQt_PyObject)'), self.ge_filter_changed)
-        self.connect(self.table_view.horizontalHeader(), QtCore.SIGNAL('likeFilterChanged(PyQt_PyObject)'), self.like_filter_changed)
         self.bottom_splitter.addWidget(self.table_view)
 
-    def execute_sql(self):
-        model = self.connection.select_top_1000(self.table_name, self.equal_filters, self.le_filters, self.ge_filters, self.like_filters)
+    def get_where_clause(self):
+        where_clause = self.table_view.horizontalHeader().get_where_clause()
+        return where_clause
+
+    def get_order_clause(self):
+        return self.table_view.horizontalHeader().get_order_clause()
+
+    def execute_sql(self, *args):
+        model = self.connection.select_top_1000(self.table_name, self.get_where_clause(), self.get_order_clause())
         if not model:
             return
-        if isinstance(model, SqlQueryModel):
+        if isinstance(model, SqlQueryModel) or isinstance(model, SqlTableQueryModel):
             self.table_view.setModel(model)
             self.table_view.resizeColumnsToContents()
             self.show_count_message(model.rowCount())
-
-    def filter_changed(self, d):
-        name = d['column'].name
-        value = d['value']
-        if value == '' and name in self.equal_filters:
-            self.equal_filters.pop(name)
-        else:
-            self.equal_filters.update({name: value})
-
-    def le_filter_changed(self, d):
-        name = d['column'].name
-        value = d['value']
-        if value == '' and name in self.le_filters:
-            self.le_filters.pop(name)
-        else:
-            self.le_filters.update({name: value})
-
-    def ge_filter_changed(self, d):
-        name = d['column'].name
-        value = d['value']
-        if value == '' and name in self.ge_filters:
-            self.ge_filters.pop(name)
-        else:
-            self.ge_filters.update({name: value})
-
-    def like_filter_changed(self, d):
-        name = d['column'].name
-        value = d['value']
-        if value == '' and name in self.like_filters:
-            self.like_filters.pop(name)
-        else:
-            self.like_filters.update({name: value})
+        elif isinstance(model, QtSql.QSqlError):
+            self.show_sql_error(model)
 
 
 class SqlTableEdit(SqlTable):
     def __init__(self, parent, table_name, connection, options=None):
         super(SqlTableEdit, self).__init__(parent, table_name, connection, options)
 
-    def execute_sql(self):
-        print self.table_name
-        model = self.connection.edit_top_200(self.table_name, self.equal_filters, self.le_filters, self.ge_filters, self.like_filters)
+    def execute_sql(self, *args):
+        model = self.connection.edit_top_200(self.table_name, self.get_where_clause(), args)
         if not model:
             return
 
@@ -724,6 +1033,10 @@ class CodeEditor(QtGui.QPlainTextEdit):
         self.option = EditorOption()
         self.options = options
         self.bookmarks = []
+        self.is_re_parse = True
+        self.parse_result = []
+        self.parse_errors = []
+        self.multi_select_start = None
 
         font = QtGui.QFont()
         font.setFamily(u'ＭＳ ゴシック')
@@ -736,17 +1049,19 @@ class CodeEditor(QtGui.QPlainTextEdit):
         self.setLineWrapMode(QtGui.QPlainTextEdit.NoWrap)
         self.setHorizontalScrollBar(EditorScrollBar(self))
         self.setVerticalScrollBar(EditorScrollBar(self))
-        self.setContentsMargins(0, 0, 0, 0)
-        self.setAcceptDrops(True)
+        self.setMouseTracking(True)
 
         self.line_number_area = LineNumberArea(self)
-        # self.ruler_area = RulerArea(self)
+        self.ruler_area = RulerArea(self)
+        self.tooltip = EditorToolTip(self)
 
         self.highlighter = SqlHighlighter(self.document())
 
         self.connect(self, QtCore.SIGNAL('blockCountChanged(int)'), self.update_line_number_area_width)
         self.connect(self, QtCore.SIGNAL('updateRequest(QRect,int)'), self.update_line_number_area)
         self.connect(self, QtCore.SIGNAL('cursorPositionChanged()'), self.cursor_position_changed)
+        self.connect(self, QtCore.SIGNAL('textChanged()'), self.text_changed)
+        self.connect(self.tooltip, QtCore.SIGNAL('open_table(PyQt_PyObject)'), self.open_table)
 
         self.update_line_number_area_width()
         self.highlight_current_line()
@@ -758,6 +1073,8 @@ class CodeEditor(QtGui.QPlainTextEdit):
         }
         '''
         self.setStyleSheet(css)
+        self.frame = QtGui.QFrame(self)
+        self.frame.setStyleSheet("QFrame {background-color: rgb(240, 240, 240);border: none;}")
 
     def init_bookmarks(self):
         if self.options and self.options.recently:
@@ -805,14 +1122,48 @@ class CodeEditor(QtGui.QPlainTextEdit):
                     start_block = start_block.next()
             cursor.endEditBlock()
 
+    def comment_out(self):
+        cursor = self.textCursor()
+        cursor.beginEditBlock()
+        start_block, end_block = self.get_selected_blocks()
+        if start_block and end_block:
+            # コメントのマークを入れる位置を見つける
+            comment_index = -1
+            # コメントを設定／解除の区分
+            is_remove = True
+            while start_block.isValid() and start_block.blockNumber() <= end_block.blockNumber():
+                block_cursor = QtGui.QTextCursor(start_block)
+                reg = QtCore.QRegExp('[^\s]+')
+                index = reg.indexIn(start_block.text())
+                text = start_block.text()[index:index+2]
+                is_remove = (is_remove and text == '--')
+                if comment_index == -1 or comment_index > index:
+                    comment_index = index
+                start_block = start_block.next()
+            start_block, end_block = self.get_selected_blocks()
+
+            while start_block.isValid() and start_block.blockNumber() <= end_block.blockNumber():
+                block_cursor = QtGui.QTextCursor(start_block)
+                if is_remove:
+                    position = start_block.position() + start_block.text().indexOf('--')
+                    block_cursor.setPosition(position, QtGui.QTextCursor.MoveAnchor)
+                    block_cursor.setPosition(position + 2, QtGui.QTextCursor.KeepAnchor)
+                    block_cursor.removeSelectedText()
+                else:
+                    position = start_block.position() + comment_index
+                    block_cursor.setPosition(position, QtGui.QTextCursor.MoveAnchor)
+                    block_cursor.insertText('--')
+                start_block = start_block.next()
+        cursor.endEditBlock()
+
     def get_main_window(self):
         return self.get_tab_window().parentWidget()
 
     def get_tab_window(self):
-        return self.parentWidget().parentWidget().parentWidget().parentWidget()
+        return self.parentWidget().parentWidget().parentWidget().parentWidget().parentWidget().parentWidget()
 
     def get_sql_editor(self):
-        return self.parentWidget().parentWidget()
+        return self.parentWidget().parentWidget().parentWidget().parentWidget()
 
     def get_status_bar(self):
         if hasattr(self.get_sql_editor(), 'status_bar'):
@@ -848,7 +1199,7 @@ class CodeEditor(QtGui.QPlainTextEdit):
             end_block = self.document().findBlock(cursor.selectionEnd() - 1)
             return start_block, end_block
         else:
-            return None, None
+            return cursor.block(), cursor.block()
 
     def get_next_pair_cursor(self, text, current_cursor):
 
@@ -881,6 +1232,23 @@ class CodeEditor(QtGui.QPlainTextEdit):
         else:
             return None
 
+    def get_parameters(self):
+        result, errors = self.get_parse_result()
+        parameters = []
+        if result and not errors:
+            parameters = result.get_parameters()
+
+        tmp = []
+        ret_lst = []
+        for param in parameters:
+            if param.sql not in tmp:
+                tmp.append(param.sql)
+                ret_lst.append(param)
+        return ret_lst
+
+    def text_changed(self):
+        self.is_re_parse = True
+
     def cursor_position_changed(self):
         """
         カーソルが変わる場合の処理
@@ -897,7 +1265,7 @@ class CodeEditor(QtGui.QPlainTextEdit):
         if digits < 3:
             digits = 3
 
-        space = 10 + self.fontMetrics().width('9') * digits
+        space = 12 + self.fontMetrics().width('9') * digits
         return space
 
     def keyPressEvent(self, event):
@@ -906,26 +1274,178 @@ class CodeEditor(QtGui.QPlainTextEdit):
             if event.key() == QtCore.Qt.Key_Backtab:
                 # Ctrl + Shift + Tab
                 self.get_tab_window().move_to_prev()
-            else:
-                super(CodeEditor, self).keyPressEvent(event)
+                return
         elif event.modifiers() == QtCore.Qt.ControlModifier:
             # Ctrl
             if event.key() == QtCore.Qt.Key_Tab:
                 # Ctrl + Tab
                 self.get_tab_window().move_to_next()
-            else:
-                super(CodeEditor, self).keyPressEvent(event)
+                return
+            elif event.key() == QtCore.Qt.Key_C and self.is_multi_select():
+                self.multi_copy()
+            elif event.key() == QtCore.Qt.Key_X and self.is_multi_select():
+                self.multi_cut()
         else:
-            super(CodeEditor, self).keyPressEvent(event)
+            cursor = self.textCursor()
+            if cursor.hasSelection() and event.key() in (QtCore.Qt.Key_Space, QtCore.Qt.Key_Tab):
+                start_block, end_block = self.get_selected_blocks()
+                if start_block and end_block and start_block.blockNumber() != end_block.blockNumber():
+                    cursor.beginEditBlock()
+                    while start_block.isValid() and start_block.blockNumber() <= end_block.blockNumber():
+                        block_cursor = QtGui.QTextCursor(start_block)
+                        block_cursor.movePosition(QtGui.QTextCursor.StartOfBlock,
+                                                  QtGui.QTextCursor.MoveAnchor)
+                        block_cursor.insertText(event.text())
+                        start_block = start_block.next()
+                    cursor.endEditBlock()
+                    return
+            elif self.is_multi_select():
+                if event.key() in (QtCore.Qt.Key_Escape,) \
+                    or (event.key() >= QtCore.Qt.Key_Home and event.key() <= QtCore.Qt.Key_PageDown):
+                    self.setExtraSelections([])
+                elif event.text():
+                    extra_selections = self.extraSelections()
+                    cursor.beginEditBlock()
+                    is_reset = True
+                    for extra_selection in extra_selections:
+                        if event.key() in (QtCore.Qt.Key_Backspace, QtCore.Qt.Key_Delete):
+                            extra_selection.cursor.removeSelectedText()
+                            is_reset = False
+                        else:
+                            insert_cursor = QtGui.QTextCursor(extra_selection.cursor)
+                            start_position = insert_cursor.selectionStart()
+                            insert_cursor.clearSelection()
+                            insert_cursor.setPosition(start_position)
+                            insert_cursor.insertText(event.text())
+                    cursor.endEditBlock()
+                    if is_reset:
+                        self.setExtraSelections(extra_selections)
+                    return
+        super(CodeEditor, self).keyPressEvent(event)
 
     def mousePressEvent(self, event):
         QtGui.QPlainTextEdit.mousePressEvent(self, event)
         btn = event.button()
-        if event.modifiers() == QtCore.Qt.ControlModifier:
-            if btn == QtCore.Qt.LeftButton:
+        if btn == QtCore.Qt.LeftButton:
+            if event.modifiers() == QtCore.Qt.ControlModifier:
                 cursor = self.textCursor()
                 cursor.select(QtGui.QTextCursor.WordUnderCursor)
                 self.setTextCursor(cursor)
+            elif event.modifiers() == QtCore.Qt.AltModifier:
+                self.multi_select_start = event.pos()
+            self.highlight_current_text()
+
+    def mouseMoveEvent(self, event):
+        if self.multi_select_start:
+            self.multi_select(self.multi_select_start, event.pos())
+        else:
+            QtGui.QPlainTextEdit.mouseMoveEvent(self, event)
+            cursor = self.cursorForPosition(event.pos())
+            cursor.select(QtGui.QTextCursor.WordUnderCursor)
+            rect = self.get_selection_rect(cursor)
+            if not rect:
+                self.tooltip.hide()
+                return
+            if not rect.contains(event.pos()):
+                self.tooltip.hide()
+                return
+            text = cursor.selectedText()
+            if not text:
+                return
+            result, errors = self.get_parse_result()
+            if result and not errors:
+                for node in result.get_child_nodes('identifier'):
+                    if (node.sql == text and cursor.selectionStart() == node.lexpos) \
+                            or (node.sql == '[' + text + ']' and cursor.selectionStart() + 1 == node.lexpos):
+                        pos = rect.bottomLeft()
+                        pos += QtCore.QPoint(self.line_number_area.width(), self.ruler_area.height())
+
+                        if node.data_type == Node.TABLE_NAME:
+                            self.tooltip.show_text(pos=pos, table_name=text)
+                        elif node.data_type == Node.COLUMN_NAME:
+                            table_name = node.get_table_name()
+                            self.tooltip.show_text(pos=pos, table_name=table_name, column_name=text)
+                        else:
+                            self.tooltip.hide()
+                        break
+
+    def mouseReleaseEvent(self, event):
+        QtGui.QPlainTextEdit.mouseReleaseEvent(self, event)
+        self.multi_select_start = None
+
+    def multi_select(self, point1, point2):
+        cursor1 = self.cursorForPosition(point1)
+        cursor2 = self.cursorForPosition(point2)
+        if cursor1.blockNumber() < cursor2.blockNumber():
+            start_block = cursor1.block()
+            end_block = cursor2.block()
+        else:
+            start_block = cursor2.block()
+            end_block = cursor1.block()
+
+        extra_selections = QtGui.QTextEdit.extraSelections(QtGui.QTextEdit())
+        while start_block.isValid() and start_block.blockNumber() <= end_block.blockNumber():
+            block_cursor = QtGui.QTextCursor(start_block)
+            y = self.cursorRect(block_cursor).y()
+            position1 = self.cursorForPosition(QtCore.QPoint(point1.x(), y)).position()
+            position2 = self.cursorForPosition(QtCore.QPoint(point2.x(), y)).position()
+            block_cursor.setPosition(position1, QtGui.QTextCursor.MoveAnchor)
+            block_cursor.setPosition(position2, QtGui.QTextCursor.KeepAnchor)
+            start_block = start_block.next()
+
+            selection = QtGui.QTextEdit.ExtraSelection()
+            selection.format.setBackground(self.palette().color(QtGui.QPalette.Highlight))
+            selection.format.setForeground(self.palette().color(QtGui.QPalette.HighlightedText))
+            selection.cursor = block_cursor
+            extra_selections.append(selection)
+        self.setExtraSelections(extra_selections)
+
+    def is_multi_select(self):
+        extra_selections = self.extraSelections()
+        if not extra_selections:
+            return False
+        if extra_selections[0].format.background().color().rgb() != self.palette().color(QtGui.QPalette.Highlight).rgb():
+            return False
+        if extra_selections[0].format.foreground().color().rgb() != self.palette().color(QtGui.QPalette.HighlightedText).rgb():
+            return False
+        return True
+
+    def multi_copy(self, is_cut=False):
+        extra_selections = self.extraSelections()
+        selected_text = ""
+        for extra_selection in extra_selections:
+            temp_text = unicode(extra_selection.cursor.selectedText())
+            if selected_text:
+                selected_text += "\r\n" + temp_text
+            else:
+                selected_text += temp_text
+            if is_cut:
+                extra_selection.cursor.removeSelectedText()
+        clipboard = QtGui.QApplication.clipboard()
+        clipboard.setText(selected_text)
+
+    def multi_cut(self):
+        cursor = self.textCursor()
+        cursor.beginEditBlock()
+        self.multi_copy(is_cut=True)
+        cursor.endEditBlock()
+
+    def get_selection_rect(self, cursor):
+        if not cursor.hasSelection():
+            return None
+        start_pos = cursor.selectionStart()
+        end_pos = cursor.selectionEnd()
+        start_cur = self.textCursor()
+        start_cur.setPosition(start_pos, QtGui.QTextCursor.MoveAnchor)
+        if not start_cur:
+            return
+        top_left = self.cursorRect(start_cur).topLeft()
+        end_cur = self.textCursor()
+        end_cur.setPosition(end_pos, QtGui.QTextCursor.MoveAnchor)
+        if not end_cur:
+            return
+        bottom_right = self.cursorRect(end_cur).bottomRight()
+        return QtCore.QRect(top_left, bottom_right)
 
     def paintEvent(self, event):
         super(CodeEditor, self).paintEvent(event)
@@ -944,9 +1464,10 @@ class CodeEditor(QtGui.QPlainTextEdit):
         QtGui.QPlainTextEdit.resizeEvent(self, event)
 
         cr = self.contentsRect()
-        self.line_number_area.setGeometry(QtCore.QRect(cr.left(), cr.top(), self.line_number_area_width(), cr.height()))
-        # self.ruler_area.setGeometry(QtCore.QRect(cr.left() + self.line_number_area_width(), cr.top(),
-        #                                          cr.width() - self.line_number_area_width(), 20))
+        self.line_number_area.setGeometry(QtCore.QRect(cr.left(), cr.top() + self.ruler_area.height(), self.line_number_area_width(), cr.height()))
+        self.ruler_area.setGeometry(QtCore.QRect(cr.left() + self.line_number_area_width(), cr.top(),
+                                                 cr.width() - self.line_number_area_width(), 20))
+        self.frame.setGeometry(QtCore.QRect(cr.left(), cr.top(), self.line_number_area_width(), self.ruler_area.height()))
 
     #def dragEnterEvent(self, event):
     #    if event.mimeData().hasFormat("text/plain"):
@@ -957,6 +1478,28 @@ class CodeEditor(QtGui.QPlainTextEdit):
     #    if text:
     #        cursor = self.cursorForPosition(event.pos())
     #        cursor.insertText(text)
+
+    def highlight_current_text(self):
+        cursor = self.textCursor()
+        cursor.select(QtGui.QTextCursor.WordUnderCursor)
+        text = cursor.selectedText()
+        if not text:
+            return
+        if unicode(text)[0] in CodeEditor.BRACKETS:
+            return
+        result, errors = self.get_parse_result()
+        if result and not errors:
+            extra_selections = QtGui.QTextEdit.extraSelections(QtGui.QTextEdit())
+            for node in result.get_child_nodes('identifier'):
+                if (node.sql == text or node.sql == '[' + text + ']') and node.lexpos:
+                    cursor = self.textCursor()
+                    cursor.setPosition(node.lexpos)
+                    cursor.select(QtGui.QTextCursor.WordUnderCursor)
+                    current_word = QtGui.QTextEdit.ExtraSelection()
+                    current_word.format.setBackground(QtGui.QColor(217, 217, 217))
+                    current_word.cursor = cursor
+                    extra_selections.append(current_word)
+            self.setExtraSelections(extra_selections)
 
     def highlight_current_line(self):
         extra_selections = QtGui.QTextEdit.extraSelections(QtGui.QTextEdit())
@@ -970,14 +1513,19 @@ class CodeEditor(QtGui.QPlainTextEdit):
             cursor.movePosition(QtGui.QTextCursor.Left, QtGui.QTextCursor.KeepAnchor)
             text = cursor.selectedText()
         if unicode(text) in CodeEditor.BRACKETS.values():
-            word_color = QtGui.QColor(QtCore.Qt.red).lighter(160)
+            word_color = QtGui.QColor('#00FF00')
             current_word = QtGui.QTextEdit.ExtraSelection()
-            current_word.format.setBackground(word_color)
+            format = current_word.format
+            format.setBackground(word_color)
+            format.setFontWeight(QtGui.QFont.Bold)
+            format.setFontUnderline(True)
+            format.setUnderlineColor(QtCore.Qt.red)
+            current_word.format = format
             current_word.cursor = cursor
             paired_cursor = self.get_next_pair_cursor(text, cursor)
             if paired_cursor:
                 paired_word = QtGui.QTextEdit.ExtraSelection()
-                paired_word.format.setBackground(word_color)
+                paired_word.format = format
                 paired_word.cursor = paired_cursor
                 extra_selections.append(current_word)
                 extra_selections.append(paired_word)
@@ -995,7 +1543,7 @@ class CodeEditor(QtGui.QPlainTextEdit):
         self.highlighter.rehighlight()
 
     def update_line_number_area_width(self):
-        self.setViewportMargins(self.line_number_area_width(), 0, 0, 0)
+        self.setViewportMargins(self.line_number_area_width(), self.ruler_area.height(), 0, 0)
         self.update_bookmark()
 
     def update_line_number_area(self, rect, dy):
@@ -1003,6 +1551,7 @@ class CodeEditor(QtGui.QPlainTextEdit):
             self.line_number_area.scroll(0, dy)
         else:
             self.line_number_area.update(0, rect.y(), self.line_number_area.width(), rect.height())
+        self.ruler_area.update(0, rect.y(), rect.width(), self.ruler_area.height())
 
         if rect.contains(self.viewport().rect()):
             self.update_line_number_area_width()
@@ -1122,9 +1671,11 @@ class CodeEditor(QtGui.QPlainTextEdit):
         """
         status_bar = self.get_status_bar()
         if status_bar:
+            position = self.textCursor().position()
             status_bar.set_line_number(self.get_current_row_number(),
                                        self.get_current_col_number(),
-                                       self.textCursor().columnNumber() + 1)
+                                       self.textCursor().columnNumber() + 1,
+                                       position)
 
     def set_status_msg(self, msg, timeout=0):
         status_bar = self.get_status_bar()
@@ -1215,42 +1766,46 @@ class CodeEditor(QtGui.QPlainTextEdit):
         self.setTextCursor(cursor)
         self.centerCursor()
 
+    def get_parse_result(self):
+        if self.is_re_parse:
+            print 'reparsed'
+            self.is_re_parse = False
+            text = self.document().toPlainText()
+            if not text:
+                return None, None
+
+            p = SqlParser()
+            parser = p.build()
+            l = SqlLexer()
+            lexer = l.build()
+            self.parse_result = parser.parse(unicode(text), lexer=lexer)
+            self.parse_errors = p.errors + l.errors
+        return self.parse_result, self.parse_errors
+
     def reformat(self):
         """
         ソース整形
         """
-        text = self.document().toPlainText()
-        if not text:
-            return
-        # try:
-        p = SqlParser()
-        parser = p.build()
-        lex = SqlLexer()
-        lexer = lex.build()
-        # lexer.input(unicode(text))
-        # while True:
-        #     tok = lexer.token()
-        #     if not tok:
-        #         break
-        #     print tok
-        result = parser.parse(unicode(text), lexer=lexer)
-        if result:
+        result, errors = self.get_parse_result()
+        if result and not errors:
             text = result.to_sql()
-            if not (p.errors + lex.errors):
-                cursor = QtGui.QTextCursor(self.document())
-                cursor.beginEditBlock()
-                cursor.select(QtGui.QTextCursor.Document)
-                cursor.removeSelectedText()
-                cursor.insertText(text)
-                cursor.endEditBlock()
-        errors = p.errors + lex.errors
+            cursor = QtGui.QTextCursor(self.document())
+            cursor.beginEditBlock()
+            cursor.select(QtGui.QTextCursor.Document)
+            cursor.removeSelectedText()
+            cursor.insertText(text)
+            cursor.endEditBlock()
         if errors:
+            for error in errors:
+                print error
             self.set_status_msg(errors[0])
-        else:
-            self.set_status_msg('Success!', 3000)
-        # except Exception, ex:
-        #     print ex
-        #     return [ex.message]
+
+    def open_table(self, data):
+        table_name = data['table_name']
+        tab_window = self.get_tab_window()
+        sql_editor = self.get_sql_editor()
+        if tab_window and sql_editor:
+            tab_window.add_table(table_name, sql_editor.connection)
 
 
 class EditorOption:
@@ -1307,12 +1862,12 @@ class EditorStatusBar(QtGui.QStatusBar):
         self.lbl_codec.setMinimumWidth(50)
         self.addPermanentWidget(self.lbl_codec)
 
-    def set_line_number(self, line, col, length):
+    def set_line_number(self, line, col, length, position=0):
         """
         ステータスバーの行番号と列番号を設定する。
         """
         if self.lbl_line_no:
-            self.lbl_line_no.setText(u"%s 行 %s 列 %s 文字" % (line, col, length))
+            self.lbl_line_no.setText(u"%s 行 %s 列 %s 文字 %s" % (line, col, length, position))
 
     def set_codec(self, name):
         if name and self.lbl_codec:
@@ -1394,7 +1949,7 @@ class EditorScrollBar(QtGui.QScrollBar):
             background: none;
         }
         '''
-        self.setStyleSheet(css)
+        # self.setStyleSheet(css)
 
     def paintEvent(self, event):
         super(EditorScrollBar, self).paintEvent(event)
@@ -1403,6 +1958,7 @@ class EditorScrollBar(QtGui.QScrollBar):
             painter = QtGui.QPainter(self)
             painter.setPen(QtGui.QColor(255, 150, 50))
             painter.setBrush(QtCore.Qt.yellow)
+            painter.setOpacity(0.6)
             for pos in self.positions:
                 y = self.get_position(pos)
                 painter.drawRect(0, y, self.width(), 2)
@@ -1418,22 +1974,56 @@ class EditorScrollBar(QtGui.QScrollBar):
         option = QtGui.QStyleOptionSlider()
         option.initFrom(self)
         rect = self.style().subControlRect(QtGui.QStyle.CC_ScrollBar, option, QtGui.QStyle.SC_ScrollBarSubLine, self)
-        return rect.height()
+        return 18
 
     def get_add_line_height(self):
         option = QtGui.QStyleOptionSlider()
         option.initFrom(self)
         rect = self.style().subControlRect(QtGui.QStyle.CC_ScrollBar, option, QtGui.QStyle.SC_ScrollBarAddLine, self)
-        return rect.height()
+        return 18
 
 
 class RulerArea(QtGui.QFrame):
+
+    HEIGHT = 13
+
     def __init__(self, parent):
         super(RulerArea, self).__init__(parent)
         self.editor = parent
+        self.setFixedHeight(RulerArea.HEIGHT)
+        self.char_width = self.editor.fontMetrics().width('9')
+
+        css = '''
+        RulerArea {
+            border-bottom: 1px solid black;
+            background-color: rgb(240, 240, 240);
+        }
+        '''
+        self.setStyleSheet(css)
+
+    def paintEvent(self, event):
+        super(RulerArea, self).paintEvent(event)
+        painter = QtGui.QPainter(self)
+        painter.setPen(QtCore.Qt.black)
+
+        offset = self.editor.contentOffset().x()
+        count = (self.width() + abs(int(offset))) / self.char_width
+        for i in range(count):
+            left = i * self.char_width + offset
+            if left < 0 or left > self.width():
+                continue
+
+            if i % 10 == 0:
+                top = 2
+                painter.drawText(left + 2, self.height() - 2, str(i / 10))
+            elif i % 5 == 0:
+                top = 5
+            else:
+                top = 9
+            painter.drawLine(left + 1, top, left + 1, self.height())
 
 
-class LineNumberArea(QtGui.QWidget):
+class LineNumberArea(QtGui.QFrame):
     def __init__(self, parent):
         super(LineNumberArea, self).__init__(parent)
         self.editor = parent
@@ -1441,16 +2031,26 @@ class LineNumberArea(QtGui.QWidget):
         self.select_start_line = -1
         self.select_end_line = -1
 
+        font = QtGui.QFont()
+        font.setFamily(u'ＭＳ ゴシック')
+        font.setFixedPitch(True)
+        font.setPointSize(10)
+        self.setFont(font)
+
+        css = '''
+        LineNumberArea {
+            border-right: 1px solid blue;
+            background-color: rgb(240, 240, 240);
+        }
+        '''
+        self.setStyleSheet(css)
+
     def sizeHint(self):
         return QtCore.QSize(self.editor.line_number_area_width(), 0)
 
     def paintEvent(self, event):
+        super(LineNumberArea, self).paintEvent(event)
         painter = QtGui.QPainter(self)
-        painter.setPen(self.palette().color(QtGui.QPalette.Window))
-        painter.setBrush(self.palette().color(QtGui.QPalette.Window))
-        painter.drawRect(0, 0, self.width(), self.height())
-        painter.setPen(QtCore.Qt.blue)
-        painter.drawLine(self.width() - 1, 0, self.width() - 1, self.height())
         painter.setBrush(QtGui.QColor(0, 128, 192))
 
         block = self.editor.firstVisibleBlock()
@@ -1489,6 +2089,120 @@ class LineNumberArea(QtGui.QWidget):
 
     def mouseReleaseEvent(self, event):
         self.is_dragged = False
+
+
+class EditorToolTip(QtGui.QFrame):
+    def __init__(self, parent):
+        QtGui.QFrame.__init__(self, parent)
+        self.btn_table_name = QtGui.QPushButton()
+        self.lbl_comma = QtGui.QLabel('.')
+        self.btn_column_name = QtGui.QPushButton()
+        self.pos = None
+        self.table_name = None
+        self.column_name = None
+        self.init_layout()
+        self.setVisible(False)
+        self.timer = QtCore.QTimer()
+        self.timer.setInterval(500)
+        self.timer.setSingleShot(True)
+        self.timer.timeout.connect(self.show_in_timeout)
+
+        css = '''
+        EditorToolTip {
+            background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                              stop:0 #F0F0F0, stop: 0.5 #FFFFFF,
+                                              stop: 0.6 #FFFFFF, stop:1 #F0F0F0);
+            color: white;
+            border: 1px solid gray;
+            padding: 2px;
+        }
+        QPushButton {
+            margin: 0px;
+            padding: 0px;
+            border: 0px;
+            color: blue;
+            text-decoration: underline;
+            text-align: left;
+        }
+        QPushButton:hover {
+            background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                              stop:0 #F0F0F0, stop: 0.5 #FFFFFF,
+                                              stop: 0.6 #FFFFFF, stop:1 #F0F0F0);
+            color: red;
+        }
+        '''
+        self.setStyleSheet(css)
+
+    def init_layout(self):
+        layout = QtGui.QVBoxLayout()
+        layout.setMargin(2)
+        layout.setSpacing(0)
+        h_box = QtGui.QHBoxLayout()
+        h_box.setMargin(0)
+        h_box.setSpacing(0)
+        # テーブル名
+        self.btn_table_name.setCursor(QtCore.Qt.PointingHandCursor)
+        self.btn_table_name.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
+        self.btn_table_name.setToolTip(u"クリックすると、テーブルを開き、データ参照できます。")
+        self.btn_table_name.setIcon(common.get_icon('data_table'))
+        self.btn_table_name.clicked.connect(self.open_table)
+        h_box.addWidget(self.btn_table_name)
+        # コンマ
+        h_box.addWidget(self.lbl_comma)
+        # 列名
+        self.btn_column_name.setCursor(QtCore.Qt.PointingHandCursor)
+        self.btn_column_name.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
+        h_box.addWidget(self.btn_column_name)
+        h_box.addStretch(0)
+
+        layout.addLayout(h_box)
+        self.setLayout(layout)
+        self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
+
+    def show_text(self, pos=None, table_name=None, column_name=None):
+        self.pos = pos
+        self.table_name = table_name
+        self.column_name = column_name
+        self.timer.start()
+
+    def show_in_timeout(self):
+        QtGui.QFrame.hide(self)
+        self.move(self.pos)
+        if self.table_name and self.column_name:
+            self.btn_table_name.setText(self.table_name)
+            self.btn_table_name.setVisible(True)
+            self.lbl_comma.setVisible(True)
+            self.btn_column_name.setText(self.column_name)
+            self.btn_column_name.setVisible(True)
+            self.show()
+        elif self.table_name:
+            self.btn_table_name.setText(self.table_name)
+            self.btn_table_name.setVisible(True)
+            self.lbl_comma.setVisible(False)
+            self.btn_column_name.setVisible(False)
+            self.show()
+        else:
+            self.btn_table_name.setVisible(False)
+            self.lbl_comma.setVisible(False)
+            self.btn_column_name.setVisible(False)
+            self.hide()
+
+    def hide(self):
+        QtGui.QFrame.hide(self)
+        self.timer.stop()
+
+    def text(self):
+        lst = []
+        if self.btn_table_name.isVisible() and self.btn_table_name.text():
+            lst.append(unicode(self.btn_table_name.text()))
+        if self.btn_column_name.isVisible() and self.btn_column_name.text():
+            lst.append(unicode(self.btn_column_name.text()))
+        return ".".join(lst)
+
+    def open_table(self):
+        table_name = self.btn_table_name.text()
+        if table_name:
+            self.emit(QtCore.SIGNAL("open_table(PyQt_PyObject)"), {"table_name": table_name})
 
 
 class FindDialog(QtGui.QDialog):
@@ -1717,6 +2431,228 @@ class BookmarkDialog(QtGui.QDialog):
             self.editor.jump_to_line(no - 1)
 
 
+class ConnectionListDialog(QtGui.QDialog):
+    def __init__(self, parent):
+        super(ConnectionListDialog, self).__init__(parent)
+
+        # self.init_layout()
+
+    def init_layout(self):
+        layout = QtGui.QVBoxLayout()
+        layout.setSpacing(0)
+        layout.setMargin(0)
+        tree = QtGui.QTreeWidget(self)
+        tree.setColumnCount(3)
+        tree.setHeaderLabels(['', u"接続名称", u"データベース名", u"接続状態"])
+        tree.setColumnHidden(0, True)
+        for i, connection_name in enumerate(Connection.get_connections()):
+            db = QtSql.QSqlDatabase.database(connection_name, False)
+            item = QtGui.QTreeWidgetItem(tree)
+            item.setData(1, QtCore.Qt.DisplayRole, connection_name)
+            item.setData(2, QtCore.Qt.DisplayRole, db.driverName())
+            if db.isOpen():
+                status = "Opened"
+            else:
+                status = "Closed"
+            item.setData(3, QtCore.Qt.DisplayRole, status)
+            tree.addTopLevelItem(item)
+        tree.resizeColumnToContents(1)
+        tree.setColumnWidth(2, 200)
+        # tree.resizeColumnToContents(2)
+
+        layout.addWidget(tree)
+        self.setLayout(layout)
+        width = tree.columnWidth(1) + tree.columnWidth(2) + tree.columnWidth(3) + 5
+        self.resize(width, 300)
+
+
+class ConnectionListDocker(QtGui.QDockWidget):
+
+    TITLE = u"データベース接続"
+
+    CATEGORY_TABLES = 'tables'
+    CATEGORY_TABLE = 'table'
+    CATEGORY_VIEWS = 'views'
+    CATEGORY_VIEW = 'view'
+
+    def __init__(self, parent):
+        super(ConnectionListDocker, self).__init__(parent)
+        self.tree = QtGui.QTreeWidget(self)
+        self.connections = {}
+        # self.drag_start_position = None
+
+        self.init_layout()
+
+        css = '''
+        QTreeWidget {
+            background-color: rgb(255, 251, 240);
+        }
+        QDockWidget {
+            border: 5px solid lightgray;
+        }
+        QDockWidget::title {
+            text-align: left;
+            background: lightgray;
+            padding-left: 35px;
+        }
+        '''
+        self.setStyleSheet(css)
+        self.setWindowTitle(ConnectionListDocker.TITLE)
+
+    def init_layout(self):
+        widget = QtGui.QWidget()
+        layout = QtGui.QVBoxLayout()
+        layout.setSpacing(0)
+        layout.setMargin(0)
+        self.tree.setHeaderHidden(True)
+        for conn in Connection.get_connections():
+            self.add_connection(conn)
+        layout.addWidget(self.tree)
+        widget.setLayout(layout)
+        self.setWidget(widget)
+
+        self.tree.itemExpanded.connect(self.expand_item)
+        self.tree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.tree.customContextMenuRequested.connect(self.onCustomContextMenu)
+        self.tree.setDragEnabled(True)
+
+    def add_connection(self, conn):
+        name = conn.get_connection_name()
+        if unicode(name) not in self.connections:
+            self.connections[name] = conn
+            item = QtGui.QTreeWidgetItem(self.tree)
+            item.setData(0, QtCore.Qt.DisplayRole, conn.get_connection_name())
+            if conn.database_type == constants.DATABASE_SQL_SERVER:
+                item.setIcon(0, common.get_icon('database_sqlserver'))
+            self.add_category(item)
+            self.tree.addTopLevelItem(item)
+
+    def add_category(self, parent_item):
+        item = QtGui.QTreeWidgetItem(parent_item)
+        item.setChildIndicatorPolicy(QtGui.QTreeWidgetItem.ShowIndicator)
+        item.setData(0, QtCore.Qt.DisplayRole, u"テーブル")
+        item.setData(0, QtCore.Qt.UserRole, ConnectionListDocker.CATEGORY_TABLES)
+        item.setIcon(0, common.get_icon('folder'))
+        parent_item.addChild(item)
+        item = QtGui.QTreeWidgetItem(parent_item)
+        item.setChildIndicatorPolicy(QtGui.QTreeWidgetItem.ShowIndicator)
+        item.setData(0, QtCore.Qt.DisplayRole, u"ビュー")
+        item.setData(0, QtCore.Qt.UserRole, ConnectionListDocker.CATEGORY_VIEWS)
+        item.setIcon(0, common.get_icon('folder'))
+        parent_item.addChild(item)
+
+    def get_top_level_item(self, item):
+        parent = item.parent()
+        if parent:
+            return self.get_top_level_item(parent)
+        else:
+            return item
+
+    def get_tab_widget(self):
+        return self.parentWidget().editors
+
+    def expand_item(self, item):
+        if item.childCount() > 0:
+            return
+
+        category = item.data(0, QtCore.Qt.UserRole)
+        conn_string = self.get_top_level_item(item).text(0)
+        conn = self.connections[unicode(conn_string)]
+        text = item.text(0)
+        if category == ConnectionListDocker.CATEGORY_TABLES:
+            self.load_tables(item, conn)
+        elif category == ConnectionListDocker.CATEGORY_VIEWS:
+            self.load_views(item, conn)
+        elif category == ConnectionListDocker.CATEGORY_TABLE:
+            self.load_columns(item, conn, text)
+
+    def load_tables(self, parent_item, connection):
+        for table in connection.get_tables():
+            item = QtGui.QTreeWidgetItem(parent_item)
+            item.setChildIndicatorPolicy(QtGui.QTreeWidgetItem.ShowIndicator)
+            item.setData(0, QtCore.Qt.DisplayRole, table)
+            item.setData(0, QtCore.Qt.UserRole, ConnectionListDocker.CATEGORY_TABLE)
+            path = os.path.join(common.get_root_path(), r"icons/data_table.png")
+            item.setIcon(0, QtGui.QIcon(path))
+            parent_item.addChild(item)
+
+    def load_views(self, parent_item, connection):
+        for table in connection.get_views():
+            item = QtGui.QTreeWidgetItem(parent_item)
+            item.setChildIndicatorPolicy(QtGui.QTreeWidgetItem.DontShowIndicator)
+            item.setData(0, QtCore.Qt.DisplayRole, table)
+            item.setData(0, QtCore.Qt.UserRole, ConnectionListDocker.CATEGORY_VIEW)
+            path = os.path.join(common.get_root_path(), r"icons/data_table.png")
+            item.setIcon(0, QtGui.QIcon(path))
+            parent_item.addChild(item)
+
+    def load_columns(self, parent_item, connection, table_name):
+        for column in connection.get_table_schema(table_name):
+            col_item = QtGui.QTreeWidgetItem(parent_item)
+            col_item.setData(0, QtCore.Qt.DisplayRole, unicode(column))
+            col_item.setData(0, QtCore.Qt.UserRole, column.name)
+            if column.is_primary_key:
+                path = os.path.join(common.get_root_path(), r"icons/data_primary_key.png")
+            else:
+                path = os.path.join(common.get_root_path(), r"icons/data_column.png")
+            col_item.setIcon(0, QtGui.QIcon(path))
+            parent_item.addChild(col_item)
+
+    def onCustomContextMenu(self, point):
+        item = self.tree.itemAt(point)
+        if not item:
+            return
+        conn_string = self.get_top_level_item(item).text(0)
+        conn = self.connections[unicode(conn_string)]
+        menu = QtGui.QMenu(self.tree)
+        user_data = item.data(0, QtCore.Qt.UserRole).toString()
+        if user_data == ConnectionListDocker.CATEGORY_TABLE:
+            menu.addAction(u"上位 1000 件を抽出(&W)", lambda who=item: self.select_top_1000(who, conn))
+            menu.addAction(u"テーブルのデータ編集(&E)", lambda who=item: self.edit_top_200(who, conn))
+            menu.addSeparator()
+        menu.addAction(u"コピー(&C)", lambda who=user_data: self.copy_name(item.text(0)))
+        menu.exec_(self.tree.mapToGlobal(point))
+
+    def select_top_1000(self, item, conn):
+        tab = self.get_tab_widget()
+        if tab:
+            table_name = item.text(0)
+            tab.add_table(table_name, conn)
+
+    def edit_top_200(self, item, conn):
+        tab = self.get_tab_widget()
+        if tab:
+            table_name = item.text(0)
+            tab.add_table_edit(table_name, conn)
+
+    #def mousePressEvent(self, event):
+    #    super(ConnectionListDocker, self).mousePressEvent(event)
+    #    if event.button() == QtCore.Qt.LeftButton:
+    #        self.drag_start_position = event.pos()
+    #        print self.drag_start_position
+    #
+    #def mouseMoveEvent(self, event):
+    #    super(ConnectionListDocker, self).mouseMoveEvent(event)
+    #    if not (event.buttons() == QtCore.Qt.LeftButton):
+    #        return
+    #    if not self.drag_start_position:
+    #        return
+    #    if (event.pos() - self.drag_start_position).manhattanLength() < QtGui.QApplication.startDragDistance():
+    #        return
+    #
+    #    print 'mouseMoveEvent'
+    #    item = self.itemAt(self.drag_start_position)
+    #    drag = QtGui.QDrag(self)
+    #    mime_data = QtCore.QMimeData()
+    #    mime_data.setText(item.data(0, QtCore.Qt.UserRole).toString())
+    #    drag.setMimeData(mime_data)
+    #    dropAction = drag.exec_(QtCore.Qt.CopyAction)
+
+    def copy_name(self, table_name):
+        clipboard = QtGui.QApplication.clipboard()
+        clipboard.setText(table_name)
+
+
 class SqlDatabaseDialog(QtGui.QDialog):
 
     TITLE_SQL_SERVER = u"SqlServer接続"
@@ -1748,7 +2684,7 @@ class SqlDatabaseDialog(QtGui.QDialog):
         layout.setMargin(10)
 
         # 接続リスト
-        self.conn_list.setFixedWidth(200)
+        self.conn_list.setFixedWidth(250)
         self.conn_list.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.conn_list.customContextMenuRequested.connect(self.onCustomContextMenu)
         self.init_conn_list()
@@ -1788,7 +2724,11 @@ class SqlDatabaseDialog(QtGui.QDialog):
         self.conn_list.clear()
 
         for conn in self.options.recently.database:
-            item = QtGui.QListWidgetItem(conn.connection_name, self.conn_list)
+            if conn.database_type == constants.DATABASE_SQL_SERVER:
+                icon = common.get_icon('database_sqlserver')
+            else:
+                icon = common.get_icon('database_oracle')
+            item = QtGui.QListWidgetItem(icon, conn.connection_name, self.conn_list)
             item.setFlags(item.flags() | QtCore.Qt.ItemIsEditable)
             item.setData(QtCore.Qt.UserRole, conn.id)
             self.conn_list.addItem(item)
@@ -1856,7 +2796,6 @@ class SqlDatabaseDialog(QtGui.QDialog):
             tab.show()
             tab.clear_input()
         elif conn and str(conn.database_type) in self.tabs:
-            print conn.database_type
             tab = self.tabs[str(conn.database_type)]
             tab.show()
             tab.set_connection(conn)
@@ -1868,18 +2807,18 @@ class SqlDatabaseDialog(QtGui.QDialog):
         conn = tab.get_connection()
         if not conn:
             return
-        if conn.server_name and conn.database_name and \
-                ((conn.auth_type == 0 and conn.user_name and conn.password) or
-                     (conn.auth_type == 1)):
+        if conn.check_input():
             connection = Connection(conn.database_type, conn.server_name, conn.database_name, conn.auth_type,
                                     conn.user_name, conn.password)
             if connection.is_open():
                 self.connection = connection
                 self.accept()
+                # self.emit(QtCore.SIGNAL("connected(PyQt_PyObject)"), {"connection": connection})
             elif connection.open():
                 connection.close()
                 self.connection = connection
                 self.accept()
+                # self.emit(QtCore.SIGNAL("connected(PyQt_PyObject)"), {"connection": connection})
             else:
                 error = connection.last_error()
                 if error:
@@ -1900,7 +2839,7 @@ class SqlDatabaseDialog(QtGui.QDialog):
         if conn.id > 0:
             conn.save()
         else:
-            dialog = ConnectionNameDialog(self, conn.database_name, conn.server_name, self.options)
+            dialog = ConnectionNameDialog(self, conn.database_name, conn.server_name, conn.user_name, self.options)
             if dialog.exec_() and dialog.get_conn_name():
                 conn.connection_name = dialog.get_conn_name()
                 self.options.recently.add_db_connection(conn)
@@ -1964,15 +2903,15 @@ class SqlConnectTab(QtGui.QWidget):
         layout = QtGui.QVBoxLayout()
         form = QtGui.QFormLayout()
         form.setMargin(0)
-        self.txt_server_name = QtGui.QLineEdit()
-        form.addRow(u"ホスト名(&H)：", self.txt_server_name)
-
-        self.txt_port = QtGui.QLineEdit('1521')
-        self.txt_port.setFixedWidth(80)
-        form.addRow(u"ポート番号(&O)：", self.txt_port)
+        #self.txt_server_name = QtGui.QLineEdit()
+        #form.addRow(u"ホスト名(&H)：", self.txt_server_name)
+        #
+        #self.txt_port = QtGui.QLineEdit('1521')
+        #self.txt_port.setFixedWidth(80)
+        #form.addRow(u"ポート番号(&O)：", self.txt_port)
 
         self.txt_database_name = QtGui.QLineEdit()
-        form.addRow(u"サービス名(&S)：", self.txt_database_name)
+        form.addRow(u"ＴＮＳ名(&S)：", self.txt_database_name)
 
         self.txt_username = QtGui.QLineEdit()
         self.txt_username.setEnabled(True)
@@ -1996,7 +2935,8 @@ class SqlConnectTab(QtGui.QWidget):
             self.txt_password.setEnabled(False)
 
     def clear_input(self):
-        self.txt_server_name.setText('')
+        if self.txt_server_name:
+            self.txt_server_name.setText('')
         if self.txt_port:
             self.txt_port.setText('1521')
         self.txt_database_name.setText('')
@@ -2006,7 +2946,7 @@ class SqlConnectTab(QtGui.QWidget):
         self.txt_password.setText('')
 
     def get_connection(self):
-        server_name = self.txt_server_name.text()
+        server_name = self.txt_server_name.text() if self.txt_server_name else ''
         database_name = self.txt_database_name.text()
         user_name = self.txt_username.text()
         password = self.txt_password.text()
@@ -2027,7 +2967,8 @@ class SqlConnectTab(QtGui.QWidget):
         if not conn:
             return
 
-        self.txt_server_name.setText(conn.server_name)
+        if self.txt_server_name:
+            self.txt_server_name.setText(conn.server_name)
         if self.txt_port:
             self.txt_port.setText(conn.port)
         self.txt_database_name.setText(conn.database_name)
@@ -2038,9 +2979,9 @@ class SqlConnectTab(QtGui.QWidget):
 
 
 class ConnectionNameDialog(QtGui.QDialog):
-    def __init__(self, parent=None, db_name='', server_name='', options=None):
+    def __init__(self, parent=None, db_name='', server_name='', user_name='', options=None):
         super(ConnectionNameDialog, self).__init__(parent)
-        self.txt_conn_name = QtGui.QLineEdit(self.get_default_conn_name(db_name, server_name))
+        self.txt_conn_name = QtGui.QLineEdit(common.get_default_conn_name(db_name, server_name, user_name))
         self.options = options
 
         self.setFixedSize(300, 80)
@@ -2063,12 +3004,6 @@ class ConnectionNameDialog(QtGui.QDialog):
         layout.addWidget(button_box)
         self.setLayout(layout)
 
-    def get_default_conn_name(self, db_name, server_name):
-        if db_name and server_name:
-            return u"%s@%s" % (db_name, server_name)
-        else:
-            return db_name + server_name
-
     def get_conn_name(self):
         return self.txt_conn_name.text()
 
@@ -2078,6 +3013,78 @@ class ConnectionNameDialog(QtGui.QDialog):
                 QtGui.QMessageBox.information(self, SqlDatabaseDialog.TITLE_SQL_SERVER, u"既に存在している接続名称です。")
             else:
                 super(ConnectionNameDialog, self).accept()
+
+
+class ParametersDialog(QtGui.QWidget):
+    def __init__(self, parameters, parent=None):
+        super(ParametersDialog, self).__init__(parent)
+        self.parameters = parameters
+
+        self.init_layout()
+
+    def init_layout(self):
+        form = self.findChild(QtGui.QFormLayout)
+        if form is None:
+            form = QtGui.QFormLayout()
+            for parameter in self.parameters:
+                txt = QtGui.QLineEdit()
+                txt.setObjectName(parameter.sql)
+                form.addRow(parameter.sql, txt)
+            self.setLayout(form)
+            return True
+        else:
+            if self.is_reset_layout(form):
+                # レイアウト再設定必要
+                self.reset_layout(form)
+                return True
+            else:
+                # レイアウト再設定必要ない、このままパラメータの値を取得する。
+                return False
+
+    def is_reset_layout(self, form):
+        if len(self.parameters) == self.get_row_count():
+            for parameter in self.parameters:
+                txt = self.findChild(QtGui.QLineEdit, parameter.sql)
+                if txt is None:
+                    return True
+                else:
+                    parameter.value = txt.text()
+            return False
+        else:
+            return True
+
+    def reset_layout(self, form):
+        for parameter in self.parameters:
+            txt = self.findChild(QtGui.QLineEdit, parameter.sql)
+            if txt is None:
+                # 存在しない場合は、一行追加する
+                txt = QtGui.QLineEdit()
+                txt.setObjectName(parameter.sql)
+                form.addRow(parameter.sql, txt)
+        for i in range(self.get_row_count()):
+            item = form.itemAt(i * 2 + 1)
+            if not item:
+                continue
+            txt = item.widget()
+            params = [param for param in self.parameters if param.sql == txt.objectName()]
+            if params and len(params) == 1:
+                pass
+            else:
+                # パラメーターのテキストボックスを削除する。
+                label = form.labelForField(txt)
+                if label:
+                    label.deleteLater()
+                txt.deleteLater()
+
+    def get_row_count(self):
+        form = self.findChild(QtGui.QFormLayout)
+        count = 0
+        if form:
+            for i in range(form.rowCount()):
+                item = form.itemAt(i * 2 + 1)
+                if item:
+                    count += 1
+        return count
 
 
 class Finding:
@@ -2222,6 +3229,10 @@ class Finding:
 
 
 class Connection:
+
+    DRIVER_MSSQL = 'QODBC'
+    DRIVER_ORACLE = 'QOCI'
+
     def __init__(self, database_type, server_name, database_name, auth_type, user_name, password):
         self.db = None
         self.database_type = database_type
@@ -2245,23 +3256,57 @@ class Connection:
                 conn_format = "DRIVER={{SQL Server}};Server={0};Database={1};Persist Security Info=True"
                 connection_string = conn_format.format(self.server_name, self.database_name)
             if not db.isValid():
-                self.db = QtSql.QSqlDatabase.addDatabase("QODBC", self.get_connection_name())
+                self.db = QtSql.QSqlDatabase.addDatabase(Connection.DRIVER_MSSQL, self.get_connection_name())
                 self.db.setDatabaseName(connection_string)
             else:
                 self.db = db
         elif self.database_type == constants.DATABASE_ORACLE:
             print 'oracle'
             if not db.isValid():
-                self.db = QtSql.QSqlDatabase.addDatabase("QOCI", self.get_connection_name())
-                self.db.setHostName(self.server_name)
+                self.db = QtSql.QSqlDatabase.addDatabase(Connection.DRIVER_ORACLE, self.get_connection_name())
+                # self.db.setHostName(self.server_name)
                 self.db.setDatabaseName(self.database_name)
                 self.db.setUserName(self.user_name)
                 self.db.setPassword(self.password)
             else:
                 self.db = db
 
+    @staticmethod
+    def load_database(db):
+        if db and db.isValid():
+            d = {}
+            if db.driverName() == Connection.DRIVER_MSSQL:
+                d = {'database_type': constants.DATABASE_SQL_SERVER, 'auth_type': 0}
+                for s in db.databaseName().split(';'):
+                    if not s.trimmed():
+                        continue
+                    if s.startsWith('DRIVER'):
+                        continue
+                    else:
+                        d[unicode(s.split('=')[0])] = s.split('=')[1]
+                if 'Uid' not in d:
+                    d['auth_type'] = 1
+                    d['Uid'] = None
+                    d['Pwd'] = None
+            return Connection(d['database_type'], d['Server'], d['Database'], d['auth_type'], d['Uid'], d['Pwd'])
+        return None
+
     def get_connection_name(self):
-        return ur"{0}@{1}".format(self.database_name, self.server_name)
+        return common.get_default_conn_name(self.database_name, self.server_name, self.user_name)
+
+    @staticmethod
+    def get_connections():
+        name_list = QtSql.QSqlDatabase.connectionNames()
+        if name_list.contains(settings.Setting.CONNECTION_NAME):
+            idx = name_list.indexOf(settings.Setting.CONNECTION_NAME)
+            name_list.removeAt(idx)
+
+        conn_list = []
+        for connection_name in name_list:
+            db = QtSql.QSqlDatabase.database(connection_name, False)
+            conn = Connection.load_database(db)
+            conn_list.append(conn)
+        return conn_list
 
     def get_databases(self):
         sql = "select name from master.dbo.sysdatabases order by name"
@@ -2272,8 +3317,17 @@ class Connection:
             databases.append(query.value(0).toString())
         return databases
 
-    def get_all_tables(self):
+    def get_tables(self):
         sql = "select name from sys.tables order by name"
+        self.db.open()
+        query = QtSql.QSqlQuery(sql, self.db)
+        tables = []
+        while query.next():
+            tables.append(query.value(0).toString())
+        return tables
+
+    def get_views(self):
+        sql = "select name from sys.views order by name"
         self.db.open()
         query = QtSql.QSqlQuery(sql, self.db)
         tables = []
@@ -2321,6 +3375,8 @@ class Connection:
     def open(self):
         if not self.is_open():
             return self.db.open()
+        if not self.db.isValid():
+            return self.db.open()
         return True
 
     def close(self):
@@ -2329,11 +3385,23 @@ class Connection:
     def is_open(self):
         return self.db.isOpen()
 
-    def execute_sql(self, sql):
+    def execute_sql(self, sql, parameters):
         self.open()
         if sql and self.db:
             query = QtSql.QSqlQuery(self.db)
+            if parameters:
+                for i, parameter in enumerate(parameters):
+                    # ＠ を ： に変換する。
+                    new_param_sql = parameter.sql
+                    new_param_sql = new_param_sql.replace('@', ':')
+                    sql = sql.replace(parameter.sql, new_param_sql)
             query.prepare(sql)
+            if parameters:
+                # 引数がある場合、引数を設定する
+                for i, parameter in enumerate(parameters):
+                    new_param_sql = parameter.sql
+                    new_param_sql = new_param_sql.replace('@', ':')
+                    query.bindValue(new_param_sql, parameter.value)
             query.exec_()
             if query.lastError().isValid():
                 return query.lastError()
@@ -2351,82 +3419,48 @@ class Connection:
             self.close()
             return None
 
-    def get_where_clause(self, eq_filters=None, le_filters=None, ge_filters=None, like_filters=None):
-        if eq_filters is None:
-            eq_filters = {}
-        if le_filters is None:
-            le_filters = {}
-        if ge_filters is None:
-            ge_filters = {}
-        if like_filters is None:
-            like_filters = {}
-
-        sql = ''
-        wheres = []
-        for k, v in eq_filters.items():
-            wheres.append("[%s]='%s'" % (k, v))
-        else:
-            if wheres:
-                sql += " AND " + " AND ".join(wheres)
-        wheres = []
-        for k, v in le_filters.items():
-            wheres.append("[%s]<='%s'" % (k, v))
-        else:
-            if wheres:
-                sql += " AND " + " AND ".join(wheres)
-        wheres = []
-        for k, v in ge_filters.items():
-            wheres.append("[%s]>='%s'" % (k, v))
-        else:
-            if wheres:
-                sql += " AND " + " AND ".join(wheres)
-        wheres = []
-        for k, v in like_filters.items():
-            wheres.append("[%s] LIKE '%s'" % (k, v))
-        else:
-            if wheres:
-                sql += " AND " + " AND ".join(wheres)
-        if sql:
-            return sql[4:]
-        else:
-            return sql
-
-    def edit_top_200(self, table_name, eq_filters=None, le_filters=None, ge_filters=None, like_filters=None):
+    def edit_top_200(self, table_name, where_clause=None, orders=None):
         if not table_name:
             return None
 
         columns = self.get_table_schema(table_name)
-        sql_where = self.get_where_clause(eq_filters, le_filters, ge_filters, like_filters)
         self.open()
-        table = DataTable()
+        table = DataTable(table_name)
         table.Columns = columns
         model = SqlTableModel(table, db=self.db)
         model.setTable(table_name)
         model.setEditStrategy(QtSql.QSqlTableModel.OnRowChange)
-        model.setFilter(sql_where)
+        model.setFilter(where_clause)
+        if orders:
+            model.setSort(*orders)
         model.select()
         return model
 
-    def select_top_1000(self, table_name, eq_filters=None, le_filters=None, ge_filters=None, like_filters=None):
+    def select_top_1000(self, table_name, where_clause=None, order_clause=None):
         if not table_name:
             return None
 
         columns = self.get_table_schema(table_name)
-        sql_where = self.get_where_clause(eq_filters, le_filters, ge_filters, like_filters)
-        sql = u'SELECT TOP 1000 * FROM [%s]' % (table_name,)
-        if sql_where:
-            sql += u' WHERE ' + sql_where
+        sql = u'SELECT TOP 256 * FROM [%s]' % (table_name,)
+        if where_clause:
+            sql += u' WHERE ' + where_clause
+        if order_clause:
+            sql += u' ORDER BY ' + order_clause
         self.open()
+        print sql
         query = QtSql.QSqlQuery(self.db)
         if query.exec_(sql):
-            table = DataTable()
+            table = DataTable(table_name)
             table.Columns = columns
             while query.next():
-                row = DataRow()
-                table.add_row(row)
-                for i in range(len(columns)):
-                    row.Values.append(query.value(i).toString())
+               row = DataRow()
+               table.add_row(row)
+               for i in range(len(columns)):
+                   row.Values.append(query.value(i))
             return SqlQueryModel(table)
+            # model = SqlTableQueryModel(table)
+            # model.setQuery(query)
+            # return model
         else:
             return query.lastError()
 
@@ -2449,5 +3483,5 @@ class Connection:
             row = DataRow()
             table.add_row(row)
             for i in range(len(columns)):
-                row.Values.append(query.value(i).toString())
+                row.Values.append(query.value(i))
         return SqlQueryModel(table)

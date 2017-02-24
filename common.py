@@ -32,6 +32,17 @@ def get_icon(name):
     return QIcon(path)
 
 
+def get_default_conn_name(db_name, server_name, user_name):
+    if db_name and server_name:
+        return u"%s@%s" % (db_name, server_name)
+    elif db_name and user_name:
+        return u"%s@%s" % (user_name, db_name)
+    elif server_name and user_name:
+        return u"%s@%s" % (user_name, server_name)
+    else:
+        return db_name + server_name + user_name
+
+
 def get_db_type(t):
     qt_type_list = [QVariant.Invalid,
                     QVariant.BitArray,

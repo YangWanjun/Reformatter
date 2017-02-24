@@ -5,7 +5,7 @@ import os
 import common, constants
 
 from PyQt4 import QtCore, QtGui
-from editor import Editors, CodeEditor, SqlDatabaseDialog
+from editor import Editors, CodeEditor, SqlDatabaseDialog, ConnectionListDocker
 from settings import Setting
 
 
@@ -18,6 +18,7 @@ class MainWindow(QtGui.QMainWindow):
         self.recent_files_menu = None
         self.toolbar_menu = None
         self.setContentsMargins(0, 0, 0, 0)
+        self.conn_list = ConnectionListDocker(self)
 
         self.init_layout()
         self.new_file()
@@ -37,7 +38,11 @@ class MainWindow(QtGui.QMainWindow):
         self.setCentralWidget(self.editors)
 
         self.init_menu()
+        self.init_file_toolbar()
+        self.init_edit_toolbar()
         self.init_db_toolbar()
+        self.addDockWidget(QtCore.Qt.LeftDockWidgetArea, self.conn_list)
+        self.conn_list.hide()
     
     def init_menu(self):
         # ファイルメニュー
@@ -51,6 +56,7 @@ class MainWindow(QtGui.QMainWindow):
 
         # 表示メニュー
         self.init_view_menu()
+        self.init_database_menu()
 
     def init_file_menu(self):
         file_menu = QtGui.QMenu(u"ファイル(&F)", self)
@@ -75,7 +81,10 @@ class MainWindow(QtGui.QMainWindow):
             codec_menu_all.addAction(action)
         self.connect(signal_mapper, QtCore.SIGNAL('mapped(QString)'), self.menu_item_clicked)
         file_menu.addSeparator()
-        file_menu.addAction(u"閉じる(&C)", self.close_file, "Ctrl+F4")
+        file_menu.addAction(common.get_icon('save_file'), u"上書き保存(&S)", self.save_file, "Ctrl+S")
+        file_menu.addAction(common.get_icon('save_as_file'), u"名前を付けて保存(&A)...", self.save_as_file, "Ctrl+Shift+S")
+        file_menu.addSeparator()
+        file_menu.addAction(common.get_icon('close_file'), u"閉じる(&C)", self.close_file, "Ctrl+F4")
         file_menu.addSeparator()
         # 最近使ったファイル
         self.recent_files_menu = file_menu.addMenu(u"最近使ったファイル(&F)")
@@ -107,10 +116,15 @@ class MainWindow(QtGui.QMainWindow):
         edit_menu = QtGui.QMenu(u"編集(&E)", self)
         self.menuBar().addMenu(edit_menu)
         
+        edit_menu.addAction(common.get_icon('undo'), constants.MENU_EDIT_UNDO, self.editor_undo, QtGui.QKeySequence.Undo)
+        edit_menu.addAction(common.get_icon('redo'), constants.MENU_EDIT_REDO, self.editor_redo, QtGui.QKeySequence.Redo)
+        edit_menu.addSeparator()
         edit_menu.addAction(u"ソース整形", self.source_reformat, "Ctrl+Shift+F")
         edit_menu.addSeparator()
         edit_menu.addAction(u"左(先頭)の空白を削除", self.delete_left_space, "ALT+L")
         edit_menu.addAction(u"右(末尾)の空白を削除", self.delete_right_space, "ALT+R")
+        edit_menu.addSeparator()
+        edit_menu.addAction(u"コメント設定・解除(&C)", self.comment_out, "Ctrl+/")
 
     def init_search_menu(self):
         search_menu = QtGui.QMenu(u"検索(&S)", self)
@@ -134,55 +148,73 @@ class MainWindow(QtGui.QMainWindow):
         view_menu = QtGui.QMenu(u"表示(&V)", self)
         self.menuBar().addMenu(view_menu)
 
-        action = view_menu.addAction(u"ウインドウを表示／隠す(&B)", self.show_bottom_window, "F4")
-        path = os.path.join(common.get_root_path(), r"icons/win_v_sep.png")
-        action.setIcon(common.get_icon('win_v_sep.png'))
-        action = view_menu.addAction(u"ウインドウを表示／隠す(&R)", self.show_right_window, "F6")
-        path = os.path.join(common.get_root_path(), r"icons/win_h_sep.png")
-        action.setIcon(common.get_icon('win_h_sep.png'))
+        view_menu.addAction(common.get_icon('win_v_sep'), u"ウインドウを表示／隠す(&B)", self.show_bottom_window, "F4")
+        view_menu.addAction(common.get_icon('win_h_sep'), u"ウインドウを表示／隠す(&R)", self.show_right_window, "F6")
         view_menu.addSeparator()
 
+        self.window_menu = QtGui.QMenu(u"ウインドウ(&W)", self)
+        view_menu.addMenu(self.window_menu)
+        self.window_menu.addAction(self.conn_list.toggleViewAction())
         self.toolbar_menu = QtGui.QMenu(u"ツールバー(&T)", self)
         view_menu.addMenu(self.toolbar_menu)
+
+    def init_database_menu(self):
+        db_menu = QtGui.QMenu(u"データベース(&D)", self)
+        self.menuBar().addMenu(db_menu)
+
+        db_menu.addAction(common.get_icon('database_add'), u"データベース追加(&A)", self.connect_database)
+        db_menu.addAction(common.get_icon('database_list'), u"接続したデータベース(&L)", self.connected_database, "Ctrl+H")
+        db_menu.addAction(common.get_icon('right_arrow'), u"ＳＱＬを実行(&E)", self.execute_sql, "F5")
+
+    def init_file_toolbar(self):
+        toolbar = self.addToolBar(constants.TOOLBAR_FILE)
+        self.toolbar_menu.addAction(toolbar.toggleViewAction())
+        toolbar.setIconSize(QtCore.QSize(16, 16))
+
+        toolbar.addAction(common.get_icon('new_file'), u"新規(Ctrl+N)", self.new_file)
+        toolbar.addAction(common.get_icon('open_file'), u"開く(Ctrl+O)", self.open_file)
+        toolbar.addAction(common.get_icon('save_file'), u"上書き保存(Ctrl+S)", self.save_file)
+        toolbar.addAction(common.get_icon('save_as_file'), u"名前を付けて保存(Ctrl+Shift+S)", self.save_as_file)
+        toolbar.addAction(common.get_icon('close_file'), u"閉じる(Ctrl+F4)", self.close_file)
+
+    def init_edit_toolbar(self):
+        toolbar = self.addToolBar(constants.TOOLBAR_EDIT)
+        self.toolbar_menu.addAction(toolbar.toggleViewAction())
+        toolbar.setIconSize(QtCore.QSize(16, 16))
+
+        toolbar.addAction(common.get_icon('undo'), constants.MENU_EDIT_UNDO, self.editor_undo)
+        toolbar.addAction(common.get_icon('redo'), constants.MENU_EDIT_REDO, self.editor_redo)
 
     def init_db_toolbar(self, connection=None):
         toolbar = self.get_toolbar(constants.TOOLBAR_DATABASE_NAME)
         if not toolbar:
             toolbar = self.addToolBar(constants.TOOLBAR_DATABASE_NAME)
             self.toolbar_menu.addAction(toolbar.toggleViewAction())
-            toolbar.setIconSize(QtCore.QSize(18, 18))
+            toolbar.setIconSize(QtCore.QSize(16, 16))
         else:
             toolbar.clear()
 
         # データベースに接続する
-        path = os.path.join(common.get_root_path(), r"icons/database_add.png")
-        action = toolbar.addAction(QtGui.QIcon(path), u"データベースに接続する。")
-        self.connect(action, QtCore.SIGNAL('triggered()'), self.connect_database)
+        toolbar.addAction(common.get_icon('database_add'), u"データベースに接続する。", self.connect_database)
+        toolbar.addAction(common.get_icon('database_list'), u"接続したデータベース", self.connected_database)
         # 接続されているデータベース
         if connection and connection.database_name:
             combo_box = QtGui.QComboBox()
-            for i, name in enumerate(connection.get_databases()):
-                combo_box.addItem(name)
-                if name.toLower() == connection.database_name.toLower():
+            for i, conn in enumerate(connection.get_connections()):
+                combo_box.addItem(conn.get_connection_name())
+                if conn.get_connection_name() == connection.get_connection_name():
                     combo_box.setCurrentIndex(i)
-            combo_box.setFixedWidth(120)
+            combo_box.setFixedWidth(150)
             sp = combo_box.view().sizePolicy()
             sp.setHorizontalPolicy(QtGui.QSizePolicy.MinimumExpanding)
             combo_box.view().setSizePolicy(sp)
             toolbar.addWidget(combo_box)
         # SQLを実行する。
-        path = os.path.join(common.get_root_path(), r"icons/right_arrow.png")
-        action = toolbar.addAction(QtGui.QIcon(path), u"ＳＱＬを実行する。")
-        action.setShortcut(QtCore.Qt.Key_F5)
-        self.connect(action, QtCore.SIGNAL('triggered()'), self.execute_sql)
+        toolbar.addAction(common.get_icon('right_arrow'), u"ＳＱＬを実行する。", self.execute_sql)
         # ウィンドウ分割
         toolbar.addSeparator()
-        path = os.path.join(common.get_root_path(), r"icons/win_v_sep.png")
-        action = toolbar.addAction(QtGui.QIcon(path), u"ウインドウを表示／隠す。(F4)")
-        self.connect(action, QtCore.SIGNAL('triggered()'), self.show_bottom_window)
-        path = os.path.join(common.get_root_path(), r"icons/win_h_sep.png")
-        action = toolbar.addAction(QtGui.QIcon(path), u"ウインドウを表示／隠す。(F6)")
-        self.connect(action, QtCore.SIGNAL('triggered()'), self.show_right_window)
+        toolbar.addAction(common.get_icon('win_v_sep'), u"ウインドウを表示／隠す。(F4)", self.show_bottom_window)
+        toolbar.addAction(common.get_icon('win_h_sep'), u"ウインドウを表示／隠す。(F6)", self.show_right_window)
 
     def set_window_title(self, title):
         self.setWindowTitle(title)
@@ -203,6 +235,12 @@ class MainWindow(QtGui.QMainWindow):
     def open_file(self, path=None, codec=None, folder=None):
         self.editors.open_file(path, codec, folder)
 
+    def save_file(self):
+        self.editors.save_file()
+
+    def save_as_file(self):
+        self.editors.save_as_file()
+
     def close_file(self):
         self.editors.removeTab(self.editors.currentIndex())
 
@@ -215,6 +253,23 @@ class MainWindow(QtGui.QMainWindow):
         code_editor = self.get_current_editor()
         if code_editor:
             code_editor.delete_right_space()
+
+    def comment_out(self):
+        code_editor = self.get_current_editor()
+        if code_editor:
+            code_editor.comment_out()
+
+    def editor_undo(self):
+        code_editor = self.get_current_editor()
+        if code_editor:
+            print 'undo'
+            code_editor.undo()
+
+    def editor_redo(self):
+        code_editor = self.get_current_editor()
+        if code_editor:
+            print 'redo'
+            code_editor.redo()
 
     def source_reformat(self):
         if self.get_current_editor():
@@ -279,8 +334,13 @@ class MainWindow(QtGui.QMainWindow):
             if sql_tab:
                 sql_tab.set_connection(dialog.connection)
                 self.init_db_toolbar(dialog.connection)
-                return True
-        return False
+                self.conn_list.add_connection(dialog.connection)
+                self.conn_list.setVisible(True)
+                return dialog.connection
+        return None
+
+    def connected_database(self):
+        self.conn_list.setVisible(not self.conn_list.isVisible())
 
     def execute_sql(self):
         sql_tab = self.get_current_tab()
@@ -303,9 +363,9 @@ class MainWindow(QtGui.QMainWindow):
 
     def get_current_editor(self):
         if self.editors:
-            return self.editors.currentWidget().code_editor
-        else:
-            return None
+            if hasattr(self.editors.currentWidget(), 'code_editor'):
+                return self.editors.currentWidget().code_editor
+        return None
 
     def get_current_tab(self):
         if self.editors:
@@ -332,6 +392,7 @@ if __name__ == '__main__':
 
     app = QtGui.QApplication(sys.argv)
     window = MainWindow()
-    window.showMaximized()
+    #window.showMaximized()
+    window.resize(1224, 800)
     window.show()
     sys.exit(app.exec_())

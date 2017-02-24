@@ -504,6 +504,19 @@ class Database(BaseOption):
         self.user_name = ''
         self.password = ''
 
+    def check_input(self):
+        if self.database_type == constants.DATABASE_SQL_SERVER:
+            if self.auth_type == 0:
+                # Sql Server認証
+                return self.server_name and self.database_name and self.user_name and self.password
+            else:
+                # Windows認証
+                return self.server_name and self.database_name
+        elif self.database_type == constants.DATABASE_ORACLE:
+            return self.database_name and self.user_name and self.password
+
+        return False
+
 
 def get_table_name_by_attr(key):
     """メンバー変数名からテーブル名を取得する。

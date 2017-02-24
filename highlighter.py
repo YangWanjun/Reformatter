@@ -85,16 +85,81 @@ class SqlHighlighter(Highlighter):
         
         keyword_patterns = [r'\b' + keyword + r'\b' for keyword in SqlLexer.reserved.values()]
 
+        format = QtGui.QTextCharFormat()
+        format.setForeground(QtGui.QColor('#FF00FF'))
+
         global_patterns = [r'@@' + _global + r'\b' for _global in SqlLexer.globals]
         for pattern in global_patterns:
-           format = QtGui.QTextCharFormat()
-           format.setForeground(QtGui.QColor('#FF00FF'))
-           self.highlighting_rules.append((QtCore.QRegExp(pattern), format))
+           self.highlighting_rules.append((QtCore.QRegExp(pattern, QtCore.Qt.CaseInsensitive), format))
+
+        aggregate_patterns = [r'\b' + _item + r'\b' for _item in SqlLexer.func_aggregate]
+        for pattern in aggregate_patterns:
+           self.highlighting_rules.append((QtCore.QRegExp(pattern, QtCore.Qt.CaseInsensitive), format))
+
+        conversion_patterns = [r'\b' + _item + r'\b' for _item in SqlLexer.func_conversion]
+        for pattern in conversion_patterns:
+           self.highlighting_rules.append((QtCore.QRegExp(pattern, QtCore.Qt.CaseInsensitive), format))
+
+        func_str_patterns = [r'\b' + _item + r'\b' for _item in MSSQL_FUNC_STRING]
+        for pattern in func_str_patterns:
+           self.highlighting_rules.append((QtCore.QRegExp(pattern, QtCore.Qt.CaseInsensitive), format))
 
         meta_data_patterns = [r'\b' + meta_data + r'\b' for meta_data in SqlLexer.meta_datas]
         for pattern in meta_data_patterns:
-           format = QtGui.QTextCharFormat()
-           format.setForeground(QtGui.QColor('#FF00FF'))
-           self.highlighting_rules.append((QtCore.QRegExp(pattern), format))
+           self.highlighting_rules.append((QtCore.QRegExp(pattern, QtCore.Qt.CaseInsensitive), format))
 
         self.init_rules(keyword_patterns)
+
+
+MSSQL_AGGREGATE = [
+    'AVG',
+    'MIN',
+    'CHECKSUM_AGG',
+    'SUM',
+    'COUNT',
+    'STDEV',
+    'COUNT_BIG',
+    'STDEVP',
+    'GROUPING',
+    'VAR',
+    'GROUPING_ID',
+    'VARP',
+    'MAX',
+]
+
+
+MSSQL_FUNC_CONVERSION = [
+    'CAST',
+    'CONVERT',
+]
+
+
+MSSQL_FUNC_STRING = [
+    'ASCII',
+    'LTRIM',
+    'SOUNDEX',
+    'CHAR',
+    'NCHAR',
+    'SPACE',
+    'CHARINDEX',
+    'PATINDEX',
+    'STR',
+    'CONCAT',
+    'QUOTENAME',
+    'STRING_ESCAPE',
+    'DIFFERENCE',
+    'REPLACE',
+    'STRING_SPLIT',
+    'FORMAT',
+    'REPLICATE',
+    'STUFF',
+    'LEFT',
+    'REVERSE',
+    'SUBSTRING',
+    'LEN',
+    'RIGHT',
+    'UNICODE',
+    'LOWER',
+    'RTRIM',
+    'UPPER',
+]
