@@ -27,3 +27,5 @@ MSG_RESEARCH_BACKWARD = u"▲末尾から再検索しました"
 
 MSG_FILE_CANNOT_READ = u"ファイルが読み取れません。"
 MSG_FILE_READONLY = u"読み込み専用で開きます。"
+
+INDENT_END = 'indent_end'
